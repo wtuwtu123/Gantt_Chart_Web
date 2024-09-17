@@ -2,270 +2,281 @@
 <html>
 <head>
     <title>Web-based Gantt Chart Tool</title>
-<style>
-    body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        margin: 0;
-        padding: 20px;
-        background-color: #f5f5f5;
-    }
+    <style>
+        /* (CSS remains the same as previously provided) */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
 
-    h1 {
-        text-align: center;
-        color: #333;
-        margin-bottom: 20px;
-    }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
 
-    #task-form {
-        display: flex;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-bottom: 20px;
-    }
+        #task-form {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
 
-    #task-form input, #task-form select, #task-form button {
-        padding: 8px;
-        font-size: 14px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-    }
+        #task-form input[type="text"],
+        #task-form input[type="date"],
+        #task-form select,
+        #task-form input[type="color"],
+        #task-form button {
+            padding: 8px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
 
-    /* Updated color picker styling */
-    #task-form input[type="color"] {
-        width: 40px;
-        height: 40px;
-        padding: 0;
-        border: none;
-        cursor: pointer;
-    }
+        #task-form input[type="text"] {
+            width: 150px;
+        }
 
-    #task-form button {
-        background-color: #4CAF50;
-        color: white;
-        border: none;
-        cursor: pointer;
-    }
+        #task-form input[type="date"] {
+            width: 130px;
+        }
 
-    #task-form button:hover {
-        background-color: #45a049;
-    }
+        #task-form select {
+            width: 140px;
+        }
 
-    #gantt-chart {
-        position: relative;
-        margin-top: 20px;
-        border: 1px solid #ccc;
-        background-color: white;
-        overflow-x: auto;
-        overflow-y: hidden;
-        padding: 10px;
-        height: 70vh; /* Use 70% of the viewport height */
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        white-space: nowrap;
-        display: flex;
-        justify-content: center;
-    }
+        /* Adjust color picker styling */
+        #task-form input[type="color"] {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            border: none;
+            cursor: pointer;
+        }
 
-    .chart-content {
-        position: relative;
-    }
+        #task-form button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            padding: 10px 15px;
+        }
 
-    .time-labels {
-        display: flex;
-        position: relative;
-    }
+        #task-form button:hover {
+            background-color: #45a049;
+        }
 
-    .time-label {
-        flex: none;
-        text-align: center;
-        border-right: 1px solid #ddd;
-        padding: 5px;
-        font-size: 12px;
-        color: #666;
-        box-sizing: border-box;
-    }
+        /* Project name display in chart */
+        #project-title {
+            font-size: 20px;
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+        }
 
-    /* Updated task-bar styling */
-    .task-bar {
-        position: absolute;
-        height: 20px;
-        color: white;
-        text-align: center;
-        line-height: 20px;
-        border-radius: 4px;
-        cursor: move;
-        display: flex;
-        align-items: center;
-        justify-content: center; /* Center the task name horizontally */
-        box-sizing: border-box;
-    }
+        #gantt-chart {
+            position: relative;
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            background-color: white;
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 10px;
+            height: 70vh; /* Use 70% of the viewport height */
+            box-sizing: border-box;
+            white-space: nowrap;
+            display: flex;
+            justify-content: center;
+        }
 
-    .task-bar.resizing {
-        opacity: 0.7;
-    }
+        .chart-container {
+            position: relative;
+        }
 
-    .resize-handle {
-        width: 5px;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.2);
-        cursor: ew-resize;
-        position: absolute;
-        top: 0;
-        z-index: 1;
-    }
+        .chart-content {
+            position: relative;
+            display: inline-block;
+        }
 
-    .resize-handle.left {
-        left: 0;
-        border-radius: 4px 0 0 4px;
-    }
+        .time-labels {
+            display: flex;
+            position: relative;
+            z-index: 2;
+        }
 
-    .resize-handle.right {
-        right: 0;
-        border-radius: 0 4px 4px 0;
-    }
+        .time-label {
+            flex: none;
+            text-align: center;
+            border-right: 1px solid #ddd;
+            padding: 5px;
+            font-size: 12px;
+            color: #666;
+            box-sizing: border-box;
+        }
 
-    /* Modal styling */
-    .modal {
-        display: none; /* Hidden by default */
-        position: fixed; /* Stay in place */
-        z-index: 10; /* Sit on top */
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        overflow: auto; /* Enable scroll if needed */
-        background-color: rgba(0, 0, 0, 0.4); /* Black w/ opacity */
-    }
+        /* Task bar styling */
+        .task-bar {
+            position: absolute;
+            height: 20px;
+            color: white;
+            text-align: center;
+            line-height: 20px;
+            border-radius: 4px;
+            cursor: move;
+            display: flex;
+            align-items: center;
+            justify-content: center; /* Center the task name horizontally */
+            box-sizing: border-box;
+            z-index: 3; /* Ensure task bars are above lines */
+        }
 
-    .modal-content {
-        background-color: #fefefe;
-        margin: 10% auto; /* 10% from the top and centered */
-        padding: 20px;
-        border: 1px solid #888;
-        width: 300px; /* Could be more or less, depending on screen size */
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    }
+        .task-bar.resizing {
+            opacity: 0.7;
+        }
 
-    #close-modal {
-        color: #aaa;
-        float: right;
-        font-size: 24px;
-        font-weight: bold;
-        cursor: pointer;
-    }
+        .resize-handle {
+            width: 5px;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            cursor: ew-resize;
+            position: absolute;
+            top: 0;
+            z-index: 4;
+        }
 
-    #edit-form input, #edit-form select {
-        width: 100%;
-        margin-bottom: 10px;
-        padding: 8px;
-        font-size: 14px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-    }
+        .resize-handle.left {
+            left: 0;
+            border-radius: 4px 0 0 4px;
+        }
 
-    /* Updated color picker styling in edit form */
-    #edit-form input[type="color"] {
-        width: 100%;
-        height: 40px;
-        padding: 0;
-        border: none;
-        cursor: pointer;
-    }
+        .resize-handle.right {
+            right: 0;
+            border-radius: 0 4px 4px 0;
+        }
 
-    #edit-form button {
-        margin-right: 10px;
-        padding: 8px 12px;
-        font-size: 14px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-    }
+        /* Modal styling */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 10; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0, 0, 0, 0.4); /* Black w/ opacity */
+        }
 
-    #edit-form button[type="submit"] {
-        background-color: #4CAF50;
-        color: white;
-    }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 10% auto; /* 10% from the top and centered */
+            padding: 20px;
+            border: 1px solid #888;
+            width: 300px; /* Could be more or less, depending on screen size */
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
 
-    #edit-form button#delete-task {
-        background-color: #f44336;
-        color: white;
-    }
+        #close-modal {
+            color: #aaa;
+            float: right;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+        }
 
-    .export-buttons {
-        text-align: center;
-        margin-top: 20px;
-    }
+        #edit-form input, #edit-form select {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 8px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
 
-    .export-buttons button {
-        padding: 10px 15px;
-        font-size: 14px;
-        margin: 0 5px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-    }
+        /* Color picker styling in edit form */
+        #edit-form input[type="color"] {
+            width: 100%;
+            height: 40px;
+            padding: 0;
+            border: none;
+            cursor: pointer;
+        }
 
-    .export-buttons button#export-jpg {
-        background-color: #FF9800;
-        color: white;
-    }
+        #edit-form button {
+            margin-right: 10px;
+            padding: 8px 12px;
+            font-size: 14px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
 
-    /* Scrollbar styling */
-    #gantt-chart::-webkit-scrollbar {
-        height: 10px;
-    }
+        #edit-form button[type="submit"] {
+            background-color: #4CAF50;
+            color: white;
+        }
 
-    #gantt-chart::-webkit-scrollbar-track {
-        background: #f1f1f1;
-    }
+        #edit-form button#delete-task {
+            background-color: #f44336;
+            color: white;
+        }
 
-    #gantt-chart::-webkit-scrollbar-thumb {
-        background: #888;
-        border-radius: 5px;
-    }
+        .export-buttons {
+            text-align: center;
+            margin-top: 20px;
+        }
 
-    #gantt-chart::-webkit-scrollbar-thumb:hover {
-        background: #555;
-    }
-	
-	    .export-buttons {
-        text-align: center;
-        margin-top: 20px;
-    }
+        .export-buttons button {
+            padding: 10px 15px;
+            font-size: 14px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
 
-    .export-buttons button {
-        padding: 10px 15px;
-        font-size: 14px;
-        margin: 0 5px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-    }
+        .export-buttons button#export-jpg {
+            background-color: #FF9800;
+            color: white;
+        }
 
-    .export-buttons button#export-jpg {
-        background-color: #FF9800;
-        color: white;
-    }
+        .export-buttons button#save-chart {
+            background-color: #2196F3;
+            color: white;
+        }
 
-    .export-buttons button#save-chart {
-        background-color: #2196F3;
-        color: white;
-    }
+        .export-buttons button#load-chart {
+            background-color: #4CAF50;
+            color: white;
+        }
 
-    .export-buttons button#load-chart {
-        background-color: #4CAF50;
-        color: white;
-    }
+        /* Hide the file input */
+        #file-input {
+            display: none;
+        }
 
-    /* Hide the file input */
-    #file-input {
-        display: none;
-    }
-	
-</style>
+        /* Scrollbar styling */
+        #gantt-chart::-webkit-scrollbar {
+            height: 10px;
+        }
 
+        #gantt-chart::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
 
+        #gantt-chart::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 5px;
+        }
+
+        #gantt-chart::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
 </head>
 <body>
 
@@ -273,6 +284,7 @@
 
     <!-- Form to add tasks -->
     <form id="task-form">
+        <input type="text" id="project-name" placeholder="Project Name">
         <input type="text" id="task-name" placeholder="Task Name" required>
         <input type="date" id="start-date" required>
         <input type="date" id="end-date" required>
@@ -307,494 +319,630 @@
         </div>
     </div>
 
-	<!-- Buttons for saving and loading -->
-	<div class="export-buttons">
-		<button id="save-chart">Save Gantt Chart</button>
-		<button id="load-chart">Load Gantt Chart</button>
-		<button id="export-jpg">Export as JPG</button>
-		<input type="file" id="file-input" accept=".json" style="display: none;">
-	</div>
+    <!-- Buttons for saving and loading -->
+    <div class="export-buttons">
+        <button id="save-chart">Save Gantt Chart</button>
+        <button id="load-chart">Load Gantt Chart</button>
+        <button id="export-jpg">Export as JPG</button>
+        <input type="file" id="file-input" accept=".json">
+    </div>
 
     <!-- Include html2canvas library for exporting as JPG -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-<script>
-    const tasks = [];
-    let zoomLevel = 1; // Zoom level variable
+    <script>
+        const tasks = [];
+        let zoomLevel = 1; // Zoom level variable
 
-    document.getElementById('task-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const taskName = document.getElementById('task-name').value;
-        const startDateValue = document.getElementById('start-date').value;
-        const endDateValue = document.getElementById('end-date').value;
+        // Get references to the project name elements
+        const projectNameInput = document.getElementById('project-name');
+        let projectTitle = ''; // Variable to hold the project name
 
-        const startDate = new Date(startDateValue);
-        const endDate = new Date(endDateValue);
+        document.getElementById('task-form').addEventListener('submit', function(e) {
+            e.preventDefault();
 
-        if (endDate < startDate) {
-            alert('End date cannot be before start date.');
-            return;
-        }
+            // Update the project title
+            projectTitle = projectNameInput.value;
 
-        const predecessor = document.getElementById('predecessor').value;
-        const color = document.getElementById('task-color').value;
+            const taskName = document.getElementById('task-name').value;
+            const startDateValue = document.getElementById('start-date').value;
+            const endDateValue = document.getElementById('end-date').value;
 
-        tasks.push({
-            id: tasks.length + 1,
-            name: taskName,
-            start: startDate,
-            end: endDate,
-            predecessor: predecessor,
-            color: color
+            const startDate = new Date(startDateValue);
+            const endDate = new Date(endDateValue);
+
+            if (endDate < startDate) {
+                alert('End date cannot be before start date.');
+                return;
+            }
+
+            const predecessor = document.getElementById('predecessor').value;
+            const color = document.getElementById('task-color').value;
+
+            tasks.push({
+                id: tasks.length + 1,
+                name: taskName,
+                start: startDate,
+                end: endDate,
+                predecessor: predecessor,
+                color: color
+            });
+
+            // Update predecessor options
+            const option = document.createElement('option');
+            option.value = tasks.length;
+            option.textContent = taskName;
+            document.getElementById('predecessor').appendChild(option);
+
+            renderGanttChart();
+
+            // Reset the task-specific fields
+            document.getElementById('task-name').value = '';
+            document.getElementById('start-date').value = '';
+            document.getElementById('end-date').value = '';
         });
 
-        // Update predecessor options
-        const option = document.createElement('option');
-        option.value = tasks.length;
-        option.textContent = taskName;
-        document.getElementById('predecessor').appendChild(option);
+        function renderGanttChart() {
+            const ganttChart = document.getElementById('gantt-chart');
+            ganttChart.innerHTML = '';
 
-        renderGanttChart();
+            // Create a container for the project title and chart content
+            const chartContainer = document.createElement('div');
+            chartContainer.className = 'chart-container';
+            chartContainer.id = 'chart-container';
+            chartContainer.style.position = 'relative'; // Ensure relative positioning
 
-        // Reset the form
-        e.target.reset();
-    });
+            // Add project title if provided
+            if (projectTitle.trim() !== '') {
+                const titleElement = document.createElement('div');
+                titleElement.id = 'project-title';
+                titleElement.textContent = projectTitle;
+                chartContainer.appendChild(titleElement);
+            }
 
-    function renderGanttChart() {
-        const ganttChart = document.getElementById('gantt-chart');
-        ganttChart.innerHTML = '';
+            if (tasks.length === 0) {
+                ganttChart.appendChild(chartContainer);
+                return;
+            }
 
-        if (tasks.length === 0) return;
+            // Determine the earliest and latest dates
+            let minDate = tasks[0].start;
+            let maxDate = tasks[0].end;
 
-        // Determine the earliest and latest dates
-        let minDate = tasks[0].start;
-        let maxDate = tasks[0].end;
+            tasks.forEach(task => {
+                if (task.start < minDate) minDate = task.start;
+                if (task.end > maxDate) maxDate = task.end;
+            });
 
-        tasks.forEach(task => {
-            if (task.start < minDate) minDate = task.start;
-            if (task.end > maxDate) maxDate = task.end;
-        });
+            // Adjust min and max dates to cover all tasks, with some padding
+            minDate = new Date(minDate);
+            maxDate = new Date(maxDate);
+            minDate.setDate(minDate.getDate() - 7);
+            maxDate.setDate(maxDate.getDate() + 7);
 
-        // Calculate the total number of days
-        const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1;
+            // Calculate the total number of days
+            const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1;
 
-        // Adjust day width based on zoom level
-        const dayWidth = 80 * zoomLevel; // Base width per day is 80 pixels
+            // Adjust day width based on zoom level
+            const dayWidth = 80 * zoomLevel; // Base width per day is 80 pixels
 
-        // Set the chart content width
-        const chartWidth = dayWidth * totalDays;
+            // Set the chart content width
+            const chartWidth = dayWidth * totalDays;
 
-        // Create chart content container
-        const chartContent = document.createElement('div');
-        chartContent.className = 'chart-content';
-        chartContent.style.width = chartWidth + 'px';
-        chartContent.style.position = 'relative';
+            // Create chart content container
+            const chartContent = document.createElement('div');
+            chartContent.className = 'chart-content';
+            chartContent.style.width = chartWidth + 'px';
+            chartContent.style.position = 'relative';
 
-        // Create time labels
-        const timeLabels = document.createElement('div');
-        timeLabels.className = 'time-labels';
-        timeLabels.style.width = chartWidth + 'px';
+            // Create time labels
+            const timeLabels = document.createElement('div');
+            timeLabels.className = 'time-labels';
+            timeLabels.style.width = chartWidth + 'px';
 
-        for (let i = 0; i < totalDays; i++) {
-            const date = new Date(minDate);
-            date.setDate(date.getDate() + i);
+            // Determine the appropriate time unit based on zoom level
+            let timeUnit = 'day';
+            if (zoomLevel <= 0.6) {
+                timeUnit = 'month';
+            } else if (zoomLevel <= 0.9) {
+                timeUnit = 'week';
+            }
 
-            const timeLabel = document.createElement('div');
-            timeLabel.className = 'time-label';
-            timeLabel.style.width = dayWidth + 'px';
-
-            // Format date as dd-mm-yyyy
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
-            timeLabel.textContent = `${day}-${month}-${year}`;
-
-            timeLabels.appendChild(timeLabel);
-        }
-
-        chartContent.appendChild(timeLabels);
-
-        // Create an SVG element for drawing dependency lines
-        const svgNS = "http://www.w3.org/2000/svg";
-        const svg = document.createElementNS(svgNS, "svg");
-        svg.setAttribute('width', chartWidth);
-        svg.setAttribute('height', '100%');
-        svg.style.position = 'absolute';
-        svg.style.top = '0';
-        svg.style.left = '0';
-        chartContent.appendChild(svg);
-
-        // Render tasks
-        tasks.forEach((task, index) => {
-            const taskBar = document.createElement('div');
-            taskBar.className = 'task-bar';
-            taskBar.textContent = task.name;
-
-            const taskStartOffset = Math.ceil((task.start - minDate) / (1000 * 60 * 60 * 24));
-            const taskDuration = Math.ceil((task.end - task.start) / (1000 * 60 * 60 * 24)) + 1;
-
-            taskBar.style.top = `${40 + index * 40}px`;
-            taskBar.style.left = `${taskStartOffset * dayWidth}px`;
-            taskBar.style.width = `${taskDuration * dayWidth}px`;
-            taskBar.style.backgroundColor = task.color;
-
-            taskBar.dataset.index = index;
-            taskBar.dataset.id = task.id;
-
-            // Add resize handles
-            const leftHandle = document.createElement('div');
-            leftHandle.className = 'resize-handle left';
-            taskBar.appendChild(leftHandle);
-
-            const rightHandle = document.createElement('div');
-            rightHandle.className = 'resize-handle right';
-            taskBar.appendChild(rightHandle);
-
-            // Add event listeners
-            addDragAndResizeEvents(taskBar, task, minDate, totalDays, dayWidth);
-
-            chartContent.appendChild(taskBar);
-        });
-
-        ganttChart.appendChild(chartContent);
-
-        // Draw dependency lines
-        drawDependencyLines(svg, chartContent, minDate, totalDays, dayWidth);
-    }
-
-    function drawDependencyLines(svg, chartContent, minDate, totalDays, dayWidth) {
-        const svgNS = "http://www.w3.org/2000/svg";
-        svg.innerHTML = ''; // Clear previous lines
-
-        tasks.forEach((task, index) => {
-            if (task.predecessor) {
-                const predecessorTask = tasks.find(t => t.id == task.predecessor);
-                if (predecessorTask) {
-                    const fromIndex = tasks.indexOf(predecessorTask);
-                    const fromTaskBar = chartContent.querySelector(`.task-bar[data-index="${fromIndex}"]`);
-                    const toTaskBar = chartContent.querySelector(`.task-bar[data-index="${index}"]`);
-
-                    // Get positions
-                    const fromX = parseFloat(fromTaskBar.style.left) + parseFloat(fromTaskBar.style.width);
-                    const fromY = parseFloat(fromTaskBar.style.top) + fromTaskBar.offsetHeight / 2;
-
-                    const toX = parseFloat(toTaskBar.style.left);
-                    const toY = parseFloat(toTaskBar.style.top) + toTaskBar.offsetHeight / 2;
-
-                    // Create line
-                    const line = document.createElementNS(svgNS, "line");
-                    line.setAttribute('x1', fromX);
-                    line.setAttribute('y1', fromY);
-                    line.setAttribute('x2', toX);
-                    line.setAttribute('y2', toY);
-                    line.setAttribute('stroke', '#555');
-                    line.setAttribute('stroke-width', '2');
-
-                    svg.appendChild(line);
+            let labelDates = [];
+            if (timeUnit === 'day') {
+                for (let i = 0; i < totalDays; i++) {
+                    const date = new Date(minDate);
+                    date.setDate(date.getDate() + i);
+                    labelDates.push(date);
+                }
+            } else if (timeUnit === 'week') {
+                let date = new Date(minDate);
+                while (date <= maxDate) {
+                    labelDates.push(new Date(date));
+                    date.setDate(date.getDate() + 7);
+                }
+            } else if (timeUnit === 'month') {
+                let date = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+                while (date <= maxDate) {
+                    labelDates.push(new Date(date));
+                    date.setMonth(date.getMonth() + 1);
                 }
             }
-        });
-    }
 
-    function addDragAndResizeEvents(taskBar, task, minDate, totalDays, dayWidth) {
-        let isResizingLeft = false;
-        let isResizingRight = false;
-        let isDragging = false;
-        let startX;
-        let originalLeft;
-        let originalWidth;
-        let originalStartDate;
-        let originalEndDate;
+            const unitWidth = dayWidth * (timeUnit === 'day' ? 1 : (timeUnit === 'week' ? 7 : 30));
 
-        const leftHandle = taskBar.querySelector('.resize-handle.left');
-        const rightHandle = taskBar.querySelector('.resize-handle.right');
+            labelDates.forEach((date, index) => {
+                const timeLabel = document.createElement('div');
+                timeLabel.className = 'time-label';
+                timeLabel.style.width = unitWidth + 'px';
 
-        leftHandle.addEventListener('mousedown', function(e) {
-            isResizingLeft = true;
-            taskBar.classList.add('resizing');
-            startX = e.clientX;
-            originalLeft = parseFloat(taskBar.style.left);
-            originalWidth = parseFloat(taskBar.style.width);
-            originalStartDate = new Date(task.start);
-            e.stopPropagation();
-            e.preventDefault();
-        });
-
-        rightHandle.addEventListener('mousedown', function(e) {
-            isResizingRight = true;
-            taskBar.classList.add('resizing');
-            startX = e.clientX;
-            originalWidth = parseFloat(taskBar.style.width);
-            originalEndDate = new Date(task.end);
-            e.stopPropagation();
-            e.preventDefault();
-        });
-
-        taskBar.addEventListener('mousedown', function(e) {
-            if (e.target === leftHandle || e.target === rightHandle) return;
-            isDragging = true;
-            taskBar.classList.add('resizing');
-            startX = e.clientX;
-            originalLeft = parseFloat(taskBar.style.left);
-            originalStartDate = new Date(task.start);
-            originalEndDate = new Date(task.end);
-            e.preventDefault();
-        });
-
-        document.addEventListener('mousemove', function(e) {
-            if (isResizingLeft) {
-                const dx = e.clientX - startX;
-                const daysChanged = Math.round(dx / (dayWidth));
-                const newStartDate = new Date(originalStartDate);
-                newStartDate.setDate(newStartDate.getDate() + daysChanged);
-                if (newStartDate <= task.end) {
-                    task.start = newStartDate;
-                    renderGanttChart();
+                if (timeUnit === 'day') {
+                    // Format date as dd-mm-yyyy
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const year = date.getFullYear();
+                    timeLabel.textContent = `${day}-${month}-${year}`;
+                } else if (timeUnit === 'week') {
+                    const weekNumber = getWeekNumber(date);
+                    timeLabel.textContent = `Week ${weekNumber}`;
+                } else if (timeUnit === 'month') {
+                    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                    timeLabel.textContent = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
                 }
-            } else if (isResizingRight) {
-                const dx = e.clientX - startX;
-                const daysChanged = Math.round(dx / (dayWidth));
-                const newEndDate = new Date(originalEndDate);
-                newEndDate.setDate(newEndDate.getDate() + daysChanged);
-                if (newEndDate >= task.start) {
+
+                timeLabels.appendChild(timeLabel);
+            });
+
+            chartContent.appendChild(timeLabels);
+
+            // Calculate content height based on tasks
+            const contentHeight = 40 + tasks.length * 40 + 20; // Adjust as needed
+            chartContent.style.height = contentHeight + 'px';
+
+            // Create an SVG element for drawing dependency lines
+            const svgNS = "http://www.w3.org/2000/svg";
+            const svg = document.createElementNS(svgNS, "svg");
+            svg.setAttribute('width', chartWidth);
+            svg.setAttribute('height', contentHeight);
+            svg.style.position = 'absolute';
+            svg.style.top = timeLabels.offsetHeight + 'px'; // Position below time labels
+            svg.style.left = '0';
+            svg.style.zIndex = '2'; // Ensure lines are behind task bars
+            chartContent.appendChild(svg);
+
+            // Append defs to SVG only once
+            const defs = document.createElementNS(svgNS, 'defs');
+            const marker = document.createElementNS(svgNS, 'marker');
+            marker.setAttribute('id', 'arrowhead');
+            marker.setAttribute('markerWidth', '10');
+            marker.setAttribute('markerHeight', '7');
+            marker.setAttribute('refX', '0');
+            marker.setAttribute('refY', '3.5');
+            marker.setAttribute('orient', 'auto');
+
+            const arrowPath = document.createElementNS(svgNS, 'polygon');
+            arrowPath.setAttribute('points', '0 0, 10 3.5, 0 7');
+            arrowPath.setAttribute('fill', '#555');
+
+            marker.appendChild(arrowPath);
+            defs.appendChild(marker);
+            svg.appendChild(defs);
+
+            // Render tasks
+            tasks.forEach((task, index) => {
+                const taskBar = document.createElement('div');
+                taskBar.className = 'task-bar';
+                taskBar.textContent = task.name;
+
+                const taskStartOffset = Math.floor((task.start - minDate) / (1000 * 60 * 60 * 24));
+                const taskDuration = Math.ceil((task.end - task.start) / (1000 * 60 * 60 * 24)) + 1;
+
+                const taskBarTop = timeLabels.offsetHeight + 20 + index * 40;
+
+                taskBar.style.top = `${taskBarTop}px`;
+                taskBar.style.left = `${taskStartOffset * dayWidth}px`;
+                taskBar.style.width = `${taskDuration * dayWidth}px`;
+                taskBar.style.backgroundColor = task.color;
+
+                taskBar.dataset.index = index;
+                taskBar.dataset.id = task.id;
+
+                // Add resize handles
+                const leftHandle = document.createElement('div');
+                leftHandle.className = 'resize-handle left';
+                taskBar.appendChild(leftHandle);
+
+                const rightHandle = document.createElement('div');
+                rightHandle.className = 'resize-handle right';
+                taskBar.appendChild(rightHandle);
+
+                // Add event listeners
+                addDragAndResizeEvents(taskBar, task, minDate, totalDays, dayWidth);
+
+                chartContent.appendChild(taskBar);
+            });
+
+            chartContainer.appendChild(chartContent);
+            ganttChart.appendChild(chartContainer);
+
+            // Draw dependency lines
+            const svgElement = chartContent.querySelector('svg');
+            drawDependencyLines(svgElement, chartContent, minDate, totalDays, dayWidth);
+        }
+
+        function getWeekNumber(d) {
+            // Copy date so don't modify original
+            d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+            // Set to nearest Thursday: current date + 4 - current day number
+            // Make Sunday's day number 7
+            d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+            // Get first day of year
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+            // Calculate full weeks to nearest Thursday
+            const weekNo = Math.ceil(((d - yearStart) / (1000 * 60 * 60 * 24) + 1) / 7);
+            // Return week number
+            return weekNo;
+        }
+
+        function drawDependencyLines(svg, chartContent, minDate, totalDays, dayWidth) {
+            const svgNS = "http://www.w3.org/2000/svg";
+
+            // Remove existing lines without clearing defs
+            const existingLines = svg.querySelectorAll('line, polyline');
+            existingLines.forEach(line => line.remove());
+
+            tasks.forEach((task, index) => {
+                if (task.predecessor) {
+                    const predecessorTask = tasks.find(t => t.id == task.predecessor);
+                    if (predecessorTask) {
+                        const fromIndex = tasks.indexOf(predecessorTask);
+                        const fromTaskBar = chartContent.querySelector(`.task-bar[data-index="${fromIndex}"]`);
+                        const toTaskBar = chartContent.querySelector(`.task-bar[data-index="${index}"]`);
+
+                        // Get positions
+                        const fromX = parseFloat(fromTaskBar.style.left) + parseFloat(fromTaskBar.style.width);
+                        const fromY = parseFloat(fromTaskBar.style.top) + fromTaskBar.offsetHeight / 2;
+
+                        const toX = parseFloat(toTaskBar.style.left);
+                        const toY = parseFloat(toTaskBar.style.top) + toTaskBar.offsetHeight / 2;
+
+                        // Adjust Y positions to be relative to the SVG element
+                        const svgOffsetY = parseFloat(svg.style.top);
+
+                        const adjustedFromY = fromY - svgOffsetY;
+                        const adjustedToY = toY - svgOffsetY;
+
+                        // Create polyline for an elbow connector
+                        const line = document.createElementNS(svgNS, "polyline");
+                        const points = `${fromX},${adjustedFromY} ${(fromX + 20)},${adjustedFromY} ${(fromX + 20)},${adjustedToY} ${toX},${adjustedToY}`;
+                        line.setAttribute('points', points);
+
+                        line.setAttribute('fill', 'none');
+                        line.setAttribute('stroke', '#555');
+                        line.setAttribute('stroke-width', '2');
+                        line.setAttribute('marker-end', 'url(#arrowhead)');
+
+                        svg.appendChild(line);
+                    }
+                }
+            });
+        }
+
+        function addDragAndResizeEvents(taskBar, task, minDate, totalDays, dayWidth) {
+            let isResizingLeft = false;
+            let isResizingRight = false;
+            let isDragging = false;
+            let startX;
+            let originalLeft;
+            let originalWidth;
+            let originalStartDate;
+            let originalEndDate;
+
+            const leftHandle = taskBar.querySelector('.resize-handle.left');
+            const rightHandle = taskBar.querySelector('.resize-handle.right');
+
+            leftHandle.addEventListener('mousedown', function(e) {
+                isResizingLeft = true;
+                taskBar.classList.add('resizing');
+                startX = e.clientX;
+                originalLeft = parseFloat(taskBar.style.left);
+                originalWidth = parseFloat(taskBar.style.width);
+                originalStartDate = new Date(task.start);
+                e.stopPropagation();
+                e.preventDefault();
+            });
+
+            rightHandle.addEventListener('mousedown', function(e) {
+                isResizingRight = true;
+                taskBar.classList.add('resizing');
+                startX = e.clientX;
+                originalWidth = parseFloat(taskBar.style.width);
+                originalEndDate = new Date(task.end);
+                e.stopPropagation();
+                e.preventDefault();
+            });
+
+            taskBar.addEventListener('mousedown', function(e) {
+                if (e.target === leftHandle || e.target === rightHandle) return;
+                isDragging = true;
+                taskBar.classList.add('resizing');
+                startX = e.clientX;
+                originalLeft = parseFloat(taskBar.style.left);
+                originalStartDate = new Date(task.start);
+                originalEndDate = new Date(task.end);
+                e.preventDefault();
+            });
+
+            function onMouseMove(e) {
+                if (isResizingLeft) {
+                    const dx = e.clientX - startX;
+                    const daysChanged = Math.round(dx / (dayWidth));
+                    const newStartDate = new Date(originalStartDate);
+                    newStartDate.setDate(newStartDate.getDate() + daysChanged);
+                    if (newStartDate <= task.end) {
+                        task.start = newStartDate;
+                        renderGanttChart();
+                    }
+                } else if (isResizingRight) {
+                    const dx = e.clientX - startX;
+                    const daysChanged = Math.round(dx / (dayWidth));
+                    const newEndDate = new Date(originalEndDate);
+                    newEndDate.setDate(newEndDate.getDate() + daysChanged);
+                    if (newEndDate >= task.start) {
+                        task.end = newEndDate;
+                        renderGanttChart();
+                    }
+                } else if (isDragging) {
+                    const dx = e.clientX - startX;
+                    const daysChanged = Math.round(dx / (dayWidth));
+                    const newStartDate = new Date(originalStartDate);
+                    const newEndDate = new Date(originalEndDate);
+                    newStartDate.setDate(newStartDate.getDate() + daysChanged);
+                    newEndDate.setDate(newEndDate.getDate() + daysChanged);
+                    task.start = newStartDate;
                     task.end = newEndDate;
                     renderGanttChart();
                 }
-            } else if (isDragging) {
-                const dx = e.clientX - startX;
-                const daysChanged = Math.round(dx / (dayWidth));
-                const newStartDate = new Date(originalStartDate);
-                const newEndDate = new Date(originalEndDate);
-                newStartDate.setDate(newStartDate.getDate() + daysChanged);
-                newEndDate.setDate(newEndDate.getDate() + daysChanged);
-                task.start = newStartDate;
-                task.end = newEndDate;
-                renderGanttChart();
             }
-        });
 
-        document.addEventListener('mouseup', function() {
-            if (isResizingLeft || isResizingRight || isDragging) {
-                isResizingLeft = false;
-                isResizingRight = false;
-                isDragging = false;
-                taskBar.classList.remove('resizing');
-            }
-        });
+            function onMouseUp() {
+                if (isResizingLeft || isResizingRight || isDragging) {
+                    isResizingLeft = false;
+                    isResizingRight = false;
+                    isDragging = false;
+                    taskBar.classList.remove('resizing');
 
-        // Open edit modal on double-click
-        taskBar.addEventListener('dblclick', function(e) {
-            openEditModal(task);
-        });
-    }
-
-    // Zoom functionality
-    const ganttChartContainer = document.getElementById('gantt-chart');
-    ganttChartContainer.addEventListener('wheel', function(e) {
-        e.preventDefault();
-        if (e.deltaY < 0) {
-            // Zoom in
-            zoomLevel = Math.min(zoomLevel + 0.1, 2); // Max zoom level 2x
-        } else {
-            // Zoom out
-            zoomLevel = Math.max(zoomLevel - 0.1, 0.5); // Min zoom level 0.5x
-        }
-        renderGanttChart();
-    });
-
-    // Edit modal elements
-    const editModal = document.getElementById('edit-modal');
-    const closeModal = document.getElementById('close-modal');
-    const editForm = document.getElementById('edit-form');
-    const editTaskName = document.getElementById('edit-task-name');
-    const editStartDate = document.getElementById('edit-start-date');
-    const editEndDate = document.getElementById('edit-end-date');
-    const editPredecessor = document.getElementById('edit-predecessor');
-    const editTaskColor = document.getElementById('edit-task-color');
-    const deleteTaskBtn = document.getElementById('delete-task');
-
-    let currentTask; // Variable to hold the task being edited
-
-    function openEditModal(task) {
-        currentTask = task;
-
-        // Populate the edit form with current task details
-        editTaskName.value = task.name;
-        editStartDate.value = task.start.toISOString().split('T')[0];
-        editEndDate.value = task.end.toISOString().split('T')[0];
-        editTaskColor.value = task.color;
-
-        // Populate predecessor options
-        editPredecessor.innerHTML = '<option value="">No predecessor</option>';
-        tasks.forEach(t => {
-            if (t.id !== task.id) {
-                const option = document.createElement('option');
-                option.value = t.id;
-                option.textContent = t.name;
-                editPredecessor.appendChild(option);
-            }
-        });
-
-        editPredecessor.value = task.predecessor;
-
-        editModal.style.display = 'block';
-    }
-
-    // Close the modal
-    closeModal.onclick = function() {
-        editModal.style.display = 'none';
-    };
-
-    // When the user clicks anywhere outside of the modal, close it
-    window.onclick = function(event) {
-        if (event.target == editModal) {
-            editModal.style.display = 'none';
-        }
-    };
-
-    // Handle form submission for editing
-    editForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        const newName = editTaskName.value;
-        const newStartDate = new Date(editStartDate.value);
-        const newEndDate = new Date(editEndDate.value);
-        const newPredecessor = editPredecessor.value;
-        const newColor = editTaskColor.value;
-
-        if (newEndDate < newStartDate) {
-            alert('End date cannot be before start date.');
-            return;
-        }
-
-        // Update the task
-        currentTask.name = newName;
-        currentTask.start = newStartDate;
-        currentTask.end = newEndDate;
-        currentTask.predecessor = newPredecessor;
-        currentTask.color = newColor;
-
-        // Update the predecessor options in the main form
-        const predecessorSelect = document.getElementById('predecessor');
-        const options = predecessorSelect.options;
-        for (let i = 0; i < options.length; i++) {
-            if (options[i].value == currentTask.id) {
-                options[i].textContent = newName;
-                break;
-            }
-        }
-
-        renderGanttChart();
-
-        editModal.style.display = 'none';
-    });
-
-    // Handle task deletion
-    deleteTaskBtn.addEventListener('click', function() {
-        // Remove the task from the tasks array
-        const index = tasks.indexOf(currentTask);
-        if (index > -1) {
-            tasks.splice(index, 1);
-        }
-
-        // Remove options from predecessor selects
-        const predecessorSelects = [document.getElementById('predecessor'), document.getElementById('edit-predecessor')];
-        predecessorSelects.forEach(select => {
-            const options = select.options;
-            for (let i = options.length - 1; i >= 0; i--) {
-                if (options[i].value == currentTask.id) {
-                    select.remove(i);
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
                 }
             }
-        });
 
-        // Update any tasks that had this task as predecessor
-        tasks.forEach(task => {
-            if (task.predecessor == currentTask.id) {
-                task.predecessor = '';
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+
+            // Open edit modal on double-click
+            taskBar.addEventListener('dblclick', function(e) {
+                openEditModal(task);
+            });
+        }
+
+        // Zoom functionality
+        const ganttChartContainer = document.getElementById('gantt-chart');
+        ganttChartContainer.addEventListener('wheel', function(e) {
+            e.preventDefault();
+            if (e.deltaY < 0) {
+                // Zoom in
+                zoomLevel = Math.min(zoomLevel + 0.1, 2); // Max zoom level 2x
+            } else {
+                // Zoom out
+                zoomLevel = Math.max(zoomLevel - 0.1, 0.1); // Min zoom level 0.1x
             }
+            renderGanttChart();
         });
 
-        renderGanttChart();
+        // Edit modal elements
+        const editModal = document.getElementById('edit-modal');
+        const closeModal = document.getElementById('close-modal');
+        const editForm = document.getElementById('edit-form');
+        const editTaskName = document.getElementById('edit-task-name');
+        const editStartDate = document.getElementById('edit-start-date');
+        const editEndDate = document.getElementById('edit-end-date');
+        const editPredecessor = document.getElementById('edit-predecessor');
+        const editTaskColor = document.getElementById('edit-task-color');
+        const deleteTaskBtn = document.getElementById('delete-task');
 
-        editModal.style.display = 'none';
-    });
+        let currentTask; // Variable to hold the task being edited
 
-    // Export as JPG
-    document.getElementById('export-jpg').addEventListener('click', function() {
-        html2canvas(document.getElementById('gantt-chart')).then(function(canvas) {
-            const link = document.createElement('a');
-            link.download = 'gantt-chart.jpg';
-            link.href = canvas.toDataURL('image/jpeg', 0.8);
-            link.click();
-        });
-    });
+        function openEditModal(task) {
+            currentTask = task;
 
-    // Save Gantt Chart functionality
-    document.getElementById('save-chart').addEventListener('click', function() {
-        const dataStr = JSON.stringify(tasks, function(key, value) {
-            // Convert Date objects to ISO strings
-            if (this[key] instanceof Date) {
-                return this[key].toISOString();
-            }
-            return value;
-        }, 2);
+            // Populate the edit form with current task details
+            editTaskName.value = task.name;
+            editStartDate.value = task.start.toISOString().split('T')[0];
+            editEndDate.value = task.end.toISOString().split('T')[0];
+            editTaskColor.value = task.color;
 
-        const blob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-
-        const link = document.createElement('a');
-        link.download = 'gantt-chart.json';
-        link.href = url;
-        link.click();
-
-        URL.revokeObjectURL(url);
-    });
-
-    // Load Gantt Chart functionality
-    document.getElementById('load-chart').addEventListener('click', function() {
-        document.getElementById('file-input').click();
-    });
-
-    document.getElementById('file-input').addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            try {
-                const loadedTasks = JSON.parse(event.target.result, function(key, value) {
-                    // Convert ISO strings back to Date objects
-                    if (key === 'start' || key === 'end') {
-                        return new Date(value);
-                    }
-                    return value;
-                });
-
-                // Clear current tasks
-                tasks.length = 0;
-                // Clear predecessor select options
-                const predecessorSelect = document.getElementById('predecessor');
-                predecessorSelect.innerHTML = '<option value="">No predecessor</option>';
-
-                // Load tasks
-                loadedTasks.forEach(task => {
-                    tasks.push(task);
-                    // Update predecessor options
+            // Populate predecessor options
+            editPredecessor.innerHTML = '<option value="">No predecessor</option>';
+            tasks.forEach(t => {
+                if (t.id !== task.id) {
                     const option = document.createElement('option');
-                    option.value = task.id;
-                    option.textContent = task.name;
-                    predecessorSelect.appendChild(option);
-                });
+                    option.value = t.id;
+                    option.textContent = t.name;
+                    editPredecessor.appendChild(option);
+                }
+            });
 
-                renderGanttChart();
-            } catch (error) {
-                alert('Failed to load Gantt chart. Please ensure the file is valid.');
+            editPredecessor.value = task.predecessor;
+
+            editModal.style.display = 'block';
+        }
+
+        // Close the modal
+        closeModal.onclick = function() {
+            editModal.style.display = 'none';
+        };
+
+        // When the user clicks anywhere outside of the modal, close it
+        window.onclick = function(event) {
+            if (event.target == editModal) {
+                editModal.style.display = 'none';
             }
         };
-        reader.readAsText(file);
-    });
-</script>
+
+        // Handle form submission for editing
+        editForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const newName = editTaskName.value;
+            const newStartDate = new Date(editStartDate.value);
+            const newEndDate = new Date(editEndDate.value);
+            const newPredecessor = editPredecessor.value;
+            const newColor = editTaskColor.value;
+
+            if (newEndDate < newStartDate) {
+                alert('End date cannot be before start date.');
+                return;
+            }
+
+            // Update the task
+            currentTask.name = newName;
+            currentTask.start = newStartDate;
+            currentTask.end = newEndDate;
+            currentTask.predecessor = newPredecessor;
+            currentTask.color = newColor;
+
+            // Update the predecessor options in the main form
+            const predecessorSelect = document.getElementById('predecessor');
+            const options = predecessorSelect.options;
+            for (let i = 0; i < options.length; i++) {
+                if (options[i].value == currentTask.id) {
+                    options[i].textContent = newName;
+                    break;
+                }
+            }
+
+            renderGanttChart();
+
+            editModal.style.display = 'none';
+        });
+
+        // Handle task deletion
+        deleteTaskBtn.addEventListener('click', function() {
+            // Remove the task from the tasks array
+            const index = tasks.indexOf(currentTask);
+            if (index > -1) {
+                tasks.splice(index, 1);
+            }
+
+            // Remove options from predecessor selects
+            const predecessorSelects = [document.getElementById('predecessor'), document.getElementById('edit-predecessor')];
+            predecessorSelects.forEach(select => {
+                const options = select.options;
+                for (let i = options.length - 1; i >= 0; i--) {
+                    if (options[i].value == currentTask.id) {
+                        select.remove(i);
+                    }
+                }
+            });
+
+            // Update any tasks that had this task as predecessor
+            tasks.forEach(task => {
+                if (task.predecessor == currentTask.id) {
+                    task.predecessor = '';
+                }
+            });
+
+            renderGanttChart();
+
+            editModal.style.display = 'none';
+        });
+
+        // Export as JPG
+        document.getElementById('export-jpg').addEventListener('click', function() {
+            // Use the gantt-chart element to include the project title and chart content
+            html2canvas(document.getElementById('gantt-chart')).then(function(canvas) {
+                const link = document.createElement('a');
+                link.download = 'gantt-chart.jpg';
+                link.href = canvas.toDataURL('image/jpeg', 0.8);
+                link.click();
+            });
+        });
+
+        // Save Gantt Chart functionality
+        document.getElementById('save-chart').addEventListener('click', function() {
+            const data = {
+                projectTitle: projectTitle,
+                tasks: tasks
+            };
+            const dataStr = JSON.stringify(data, function(key, value) {
+                // Convert Date objects to ISO strings
+                if (this[key] instanceof Date) {
+                    return this[key].toISOString();
+                }
+                return value;
+            }, 2);
+
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.download = 'gantt-chart.json';
+            link.href = url;
+            link.click();
+
+            URL.revokeObjectURL(url);
+        });
+
+        // Load Gantt Chart functionality
+        document.getElementById('load-chart').addEventListener('click', function() {
+            document.getElementById('file-input').click();
+        });
+
+        document.getElementById('file-input').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                try {
+                    const loadedData = JSON.parse(event.target.result, function(key, value) {
+                        // Convert ISO strings back to Date objects
+                        if (key === 'start' || key === 'end') {
+                            return new Date(value);
+                        }
+                        return value;
+                    });
+
+                    // Load project title
+                    projectTitle = loadedData.projectTitle || '';
+                    projectNameInput.value = projectTitle;
+
+                    // Clear current tasks
+                    tasks.length = 0;
+                    // Clear predecessor select options
+                    const predecessorSelect = document.getElementById('predecessor');
+                    predecessorSelect.innerHTML = '<option value="">No predecessor</option>';
+
+                    // Load tasks
+                    loadedData.tasks.forEach(task => {
+                        tasks.push(task);
+                        // Update predecessor options
+                        const option = document.createElement('option');
+                        option.value = task.id;
+                        option.textContent = task.name;
+                        predecessorSelect.appendChild(option);
+                    });
+
+                    renderGanttChart();
+                } catch (error) {
+                    alert('Failed to load Gantt chart. Please ensure the file is valid.');
+                }
+            };
+            reader.readAsText(file);
+        });
+    </script>
 
 </body>
 </html>
