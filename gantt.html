@@ -1,948 +1,426 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Web-based Gantt Chart Tool</title>
+    <meta charset="UTF-8">
+    <title>Gantt Chart Tool</title>
     <style>
-        /* (CSS remains the same as previously provided) */
+        /* Ensure the box model includes padding and borders in the element's total size */
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: Arial, sans-serif;
             margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
         }
 
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 20px;
+        #controls {
+            margin: 10px;
         }
 
-        #task-form {
-            display: flex;
-            justify-content: center;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 20px;
+        #controls button {
+            margin-right: 5px;
         }
 
-        #task-form input[type="text"],
-        #task-form input[type="date"],
-        #task-form select,
-        #task-form input[type="color"],
-        #task-form button {
-            padding: 8px;
-            font-size: 14px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-
-        #task-form input[type="text"] {
-            width: 150px;
-        }
-
-        #task-form input[type="date"] {
-            width: 130px;
-        }
-
-        #task-form select {
-            width: 140px;
-        }
-
-        /* Adjust color picker styling */
-        #task-form input[type="color"] {
-            width: 40px;
-            height: 40px;
-            padding: 0;
-            border: none;
-            cursor: pointer;
-        }
-
-        #task-form button {
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            cursor: pointer;
-            padding: 10px 15px;
-        }
-
-        #task-form button:hover {
-            background-color: #45a049;
-        }
-
-        /* Project name display in chart */
-        #project-title {
-            font-size: 20px;
-            color: #333;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-
-        #gantt-chart {
-            position: relative;
-            margin-top: 20px;
-            border: 1px solid #ccc;
-            background-color: white;
-            overflow-x: auto;
-            overflow-y: hidden;
-            padding: 10px;
-            height: 70vh; /* Use 70% of the viewport height */
-            box-sizing: border-box;
-            white-space: nowrap;
-            display: flex;
-            justify-content: center;
-        }
-
-        .chart-container {
+        #ganttChartContainer {
+            width: 100%;
+            /* Adjust the height to account for the header and controls */
+            height: calc(100vh - 130px); /* Adjust this value if necessary */
+            overflow: auto; /* Enable both horizontal and vertical scrolling */
             position: relative;
         }
 
-        .chart-content {
-            position: relative;
-            display: inline-block;
+        svg {
+            font-family: Arial, sans-serif;
         }
 
-        .time-labels {
-            display: flex;
-            position: relative;
-            z-index: 2;
-        }
-
-        .time-label {
-            flex: none;
-            text-align: center;
-            border-right: 1px solid #ddd;
-            padding: 5px;
+        .task-name {
+            fill: #000;
             font-size: 12px;
-            color: #666;
-            box-sizing: border-box;
+            text-anchor: start;
         }
 
-        /* Task bar styling */
         .task-bar {
-            position: absolute;
-            height: 20px;
-            color: white;
-            text-align: center;
-            line-height: 20px;
-            border-radius: 4px;
-            cursor: move;
-            display: flex;
-            align-items: center;
-            justify-content: center; /* Center the task name horizontally */
-            box-sizing: border-box;
-            z-index: 3; /* Ensure task bars are above lines */
+            cursor: pointer;
         }
 
-        .task-bar.resizing {
-            opacity: 0.7;
+        .axis-label {
+            fill: #333;
+            font-size: 12px;
+            text-anchor: middle;
         }
 
-        .resize-handle {
-            width: 5px;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.2);
-            cursor: ew-resize;
-            position: absolute;
-            top: 0;
-            z-index: 4;
+        .axis-line {
+            stroke: #e0e0e0;
+            stroke-width: 1;
         }
 
-        .resize-handle.left {
-            left: 0;
-            border-radius: 4px 0 0 4px;
+        .header {
+            fill: #f0f0f0;
+            stroke: #ccc;
+            stroke-width: 1;
         }
 
-        .resize-handle.right {
-            right: 0;
-            border-radius: 0 4px 4px 0;
-        }
-
-        /* Modal styling */
-        .modal {
-            display: none; /* Hidden by default */
-            position: fixed; /* Stay in place */
-            z-index: 10; /* Sit on top */
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto; /* Enable scroll if needed */
-            background-color: rgba(0, 0, 0, 0.4); /* Black w/ opacity */
-        }
-
-        .modal-content {
-            background-color: #fefefe;
-            margin: 10% auto; /* 10% from the top and centered */
-            padding: 20px;
-            border: 1px solid #888;
-            width: 300px; /* Could be more or less, depending on screen size */
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        #close-modal {
-            color: #aaa;
-            float: right;
-            font-size: 24px;
+        .header-text {
+            fill: #000;
+            font-size: 12px;
             font-weight: bold;
-            cursor: pointer;
+            text-anchor: start;
         }
 
-        #edit-form input, #edit-form select {
-            width: 100%;
-            margin-bottom: 10px;
-            padding: 8px;
-            font-size: 14px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+        /* Customize scrollbar for WebKit-based browsers (Chrome, Edge, Safari) */
+        #ganttChartContainer::-webkit-scrollbar {
+            height: 16px; /* Increase the scrollbar height */
         }
 
-        /* Color picker styling in edit form */
-        #edit-form input[type="color"] {
-            width: 100%;
-            height: 40px;
-            padding: 0;
-            border: none;
-            cursor: pointer;
+        #ganttChartContainer::-webkit-scrollbar-thumb {
+            background-color: #ccc;
+            border-radius: 8px;
         }
 
-        #edit-form button {
-            margin-right: 10px;
-            padding: 8px 12px;
-            font-size: 14px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
+        /* Optional: For Firefox, use scrollbar-width and scrollbar-color */
+        #ganttChartContainer {
+            scrollbar-width: thin;
+            scrollbar-color: #ccc transparent;
         }
 
-        #edit-form button[type="submit"] {
-            background-color: #4CAF50;
-            color: white;
-        }
-
-        #edit-form button#delete-task {
-            background-color: #f44336;
-            color: white;
-        }
-
-        .export-buttons {
-            text-align: center;
-            margin-top: 20px;
-        }
-
-        .export-buttons button {
-            padding: 10px 15px;
-            font-size: 14px;
-            margin: 0 5px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .export-buttons button#export-jpg {
-            background-color: #FF9800;
-            color: white;
-        }
-
-        .export-buttons button#save-chart {
-            background-color: #2196F3;
-            color: white;
-        }
-
-        .export-buttons button#load-chart {
-            background-color: #4CAF50;
-            color: white;
-        }
-
-        /* Hide the file input */
-        #file-input {
-            display: none;
-        }
-
-        /* Scrollbar styling */
-        #gantt-chart::-webkit-scrollbar {
-            height: 10px;
-        }
-
-        #gantt-chart::-webkit-scrollbar-track {
-            background: #f1f1f1;
-        }
-
-        #gantt-chart::-webkit-scrollbar-thumb {
-            background: #888;
-            border-radius: 5px;
-        }
-
-        #gantt-chart::-webkit-scrollbar-thumb:hover {
-            background: #555;
+        /* Cursor style for the draggable separator */
+        .separator-line {
+            cursor: col-resize;
         }
     </style>
 </head>
 <body>
-
     <h1>Gantt Chart Tool</h1>
-
-    <!-- Form to add tasks -->
-    <form id="task-form">
-        <input type="text" id="project-name" placeholder="Project Name">
-        <input type="text" id="task-name" placeholder="Task Name" required>
-        <input type="date" id="start-date" required>
-        <input type="date" id="end-date" required>
-        <select id="predecessor">
-            <option value="">No predecessor</option>
-        </select>
-        <input type="color" id="task-color" value="#3a87ad">
-        <button type="submit">Add Task</button>
-    </form>
-
-    <!-- Container for the Gantt chart -->
-    <div id="gantt-chart">
+    <div id="controls">
+        <input type="file" id="csvFileInput" accept=".csv" />
+        <button id="zoomInButton">Zoom In</button>
+        <button id="zoomOutButton">Zoom Out</button>
+    </div>
+    <div id="ganttChartContainer">
         <!-- Gantt chart will be rendered here -->
     </div>
 
-    <!-- Modal for editing tasks -->
-    <div id="edit-modal" class="modal">
-        <div class="modal-content">
-            <span id="close-modal">&times;</span>
-            <h2>Edit Task</h2>
-            <form id="edit-form">
-                <input type="text" id="edit-task-name" required>
-                <input type="date" id="edit-start-date" required>
-                <input type="date" id="edit-end-date" required>
-                <select id="edit-predecessor">
-                    <option value="">No predecessor</option>
-                </select>
-                <input type="color" id="edit-task-color">
-                <button type="submit">Save Changes</button>
-                <button type="button" id="delete-task">Delete Task</button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Buttons for saving and loading -->
-    <div class="export-buttons">
-        <button id="save-chart">Save Gantt Chart</button>
-        <button id="load-chart">Load Gantt Chart</button>
-        <button id="export-jpg">Export as JPG</button>
-        <input type="file" id="file-input" accept=".json">
-    </div>
-
-    <!-- Include html2canvas library for exporting as JPG -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
     <script>
-        const tasks = [];
-        let zoomLevel = 1; // Zoom level variable
-
-        // Get references to the project name elements
-        const projectNameInput = document.getElementById('project-name');
-        let projectTitle = ''; // Variable to hold the project name
-
-        document.getElementById('task-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-
-            // Update the project title
-            projectTitle = projectNameInput.value;
-
-            const taskName = document.getElementById('task-name').value;
-            const startDateValue = document.getElementById('start-date').value;
-            const endDateValue = document.getElementById('end-date').value;
-
-            const startDate = new Date(startDateValue);
-            const endDate = new Date(endDateValue);
-
-            if (endDate < startDate) {
-                alert('End date cannot be before start date.');
+        document.getElementById('csvFileInput').addEventListener('change', function(e) {
+            var file = e.target.files[0];
+            if (!file) {
                 return;
             }
-
-            const predecessor = document.getElementById('predecessor').value;
-            const color = document.getElementById('task-color').value;
-
-            tasks.push({
-                id: tasks.length + 1,
-                name: taskName,
-                start: startDate,
-                end: endDate,
-                predecessor: predecessor,
-                color: color
-            });
-
-            // Update predecessor options
-            const option = document.createElement('option');
-            option.value = tasks.length;
-            option.textContent = taskName;
-            document.getElementById('predecessor').appendChild(option);
-
-            renderGanttChart();
-
-            // Reset the task-specific fields
-            document.getElementById('task-name').value = '';
-            document.getElementById('start-date').value = '';
-            document.getElementById('end-date').value = '';
-        });
-
-        function renderGanttChart() {
-            const ganttChart = document.getElementById('gantt-chart');
-            ganttChart.innerHTML = '';
-
-            // Create a container for the project title and chart content
-            const chartContainer = document.createElement('div');
-            chartContainer.className = 'chart-container';
-            chartContainer.id = 'chart-container';
-            chartContainer.style.position = 'relative'; // Ensure relative positioning
-
-            // Add project title if provided
-            if (projectTitle.trim() !== '') {
-                const titleElement = document.createElement('div');
-                titleElement.id = 'project-title';
-                titleElement.textContent = projectTitle;
-                chartContainer.appendChild(titleElement);
-            }
-
-            if (tasks.length === 0) {
-                ganttChart.appendChild(chartContainer);
-                return;
-            }
-
-            // Determine the earliest and latest dates
-            let minDate = tasks[0].start;
-            let maxDate = tasks[0].end;
-
-            tasks.forEach(task => {
-                if (task.start < minDate) minDate = task.start;
-                if (task.end > maxDate) maxDate = task.end;
-            });
-
-            // Adjust min and max dates to cover all tasks, with some padding
-            minDate = new Date(minDate);
-            maxDate = new Date(maxDate);
-            minDate.setDate(minDate.getDate() - 7);
-            maxDate.setDate(maxDate.getDate() + 7);
-
-            // Calculate the total number of days
-            const totalDays = Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1;
-
-            // Adjust day width based on zoom level
-            const dayWidth = 80 * zoomLevel; // Base width per day is 80 pixels
-
-            // Set the chart content width
-            const chartWidth = dayWidth * totalDays;
-
-            // Create chart content container
-            const chartContent = document.createElement('div');
-            chartContent.className = 'chart-content';
-            chartContent.style.width = chartWidth + 'px';
-            chartContent.style.position = 'relative';
-
-            // Create time labels
-            const timeLabels = document.createElement('div');
-            timeLabels.className = 'time-labels';
-            timeLabels.style.width = chartWidth + 'px';
-
-            // Determine the appropriate time unit based on zoom level
-            let timeUnit = 'day';
-            if (zoomLevel <= 0.6) {
-                timeUnit = 'month';
-            } else if (zoomLevel <= 0.9) {
-                timeUnit = 'week';
-            }
-
-            let labelDates = [];
-            if (timeUnit === 'day') {
-                for (let i = 0; i < totalDays; i++) {
-                    const date = new Date(minDate);
-                    date.setDate(date.getDate() + i);
-                    labelDates.push(date);
-                }
-            } else if (timeUnit === 'week') {
-                let date = new Date(minDate);
-                while (date <= maxDate) {
-                    labelDates.push(new Date(date));
-                    date.setDate(date.getDate() + 7);
-                }
-            } else if (timeUnit === 'month') {
-                let date = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
-                while (date <= maxDate) {
-                    labelDates.push(new Date(date));
-                    date.setMonth(date.getMonth() + 1);
-                }
-            }
-
-            const unitWidth = dayWidth * (timeUnit === 'day' ? 1 : (timeUnit === 'week' ? 7 : 30));
-
-            labelDates.forEach((date, index) => {
-                const timeLabel = document.createElement('div');
-                timeLabel.className = 'time-label';
-                timeLabel.style.width = unitWidth + 'px';
-
-                if (timeUnit === 'day') {
-                    // Format date as dd-mm-yyyy
-                    const day = String(date.getDate()).padStart(2, '0');
-                    const month = String(date.getMonth() + 1).padStart(2, '0');
-                    const year = date.getFullYear();
-                    timeLabel.textContent = `${day}-${month}-${year}`;
-                } else if (timeUnit === 'week') {
-                    const weekNumber = getWeekNumber(date);
-                    timeLabel.textContent = `Week ${weekNumber}`;
-                } else if (timeUnit === 'month') {
-                    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                                        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-                    timeLabel.textContent = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
-                }
-
-                timeLabels.appendChild(timeLabel);
-            });
-
-            chartContent.appendChild(timeLabels);
-
-            // Calculate content height based on tasks
-            const contentHeight = 40 + tasks.length * 40 + 20; // Adjust as needed
-            chartContent.style.height = contentHeight + 'px';
-
-            // Create an SVG element for drawing dependency lines
-            const svgNS = "http://www.w3.org/2000/svg";
-            const svg = document.createElementNS(svgNS, "svg");
-            svg.setAttribute('width', chartWidth);
-            svg.setAttribute('height', contentHeight);
-            svg.style.position = 'absolute';
-            svg.style.top = timeLabels.offsetHeight + 'px'; // Position below time labels
-            svg.style.left = '0';
-            svg.style.zIndex = '2'; // Ensure lines are behind task bars
-            chartContent.appendChild(svg);
-
-            // Append defs to SVG only once
-            const defs = document.createElementNS(svgNS, 'defs');
-            const marker = document.createElementNS(svgNS, 'marker');
-            marker.setAttribute('id', 'arrowhead');
-            marker.setAttribute('markerWidth', '10');
-            marker.setAttribute('markerHeight', '7');
-            marker.setAttribute('refX', '0');
-            marker.setAttribute('refY', '3.5');
-            marker.setAttribute('orient', 'auto');
-
-            const arrowPath = document.createElementNS(svgNS, 'polygon');
-            arrowPath.setAttribute('points', '0 0, 10 3.5, 0 7');
-            arrowPath.setAttribute('fill', '#555');
-
-            marker.appendChild(arrowPath);
-            defs.appendChild(marker);
-            svg.appendChild(defs);
-
-            // Render tasks
-            tasks.forEach((task, index) => {
-                const taskBar = document.createElement('div');
-                taskBar.className = 'task-bar';
-                taskBar.textContent = task.name;
-
-                const taskStartOffset = Math.floor((task.start - minDate) / (1000 * 60 * 60 * 24));
-                const taskDuration = Math.ceil((task.end - task.start) / (1000 * 60 * 60 * 24)) + 1;
-
-                const taskBarTop = timeLabels.offsetHeight + 20 + index * 40;
-
-                taskBar.style.top = `${taskBarTop}px`;
-                taskBar.style.left = `${taskStartOffset * dayWidth}px`;
-                taskBar.style.width = `${taskDuration * dayWidth}px`;
-                taskBar.style.backgroundColor = task.color;
-
-                taskBar.dataset.index = index;
-                taskBar.dataset.id = task.id;
-
-                // Add resize handles
-                const leftHandle = document.createElement('div');
-                leftHandle.className = 'resize-handle left';
-                taskBar.appendChild(leftHandle);
-
-                const rightHandle = document.createElement('div');
-                rightHandle.className = 'resize-handle right';
-                taskBar.appendChild(rightHandle);
-
-                // Add event listeners
-                addDragAndResizeEvents(taskBar, task, minDate, totalDays, dayWidth);
-
-                chartContent.appendChild(taskBar);
-            });
-
-            chartContainer.appendChild(chartContent);
-            ganttChart.appendChild(chartContainer);
-
-            // Draw dependency lines
-            const svgElement = chartContent.querySelector('svg');
-            drawDependencyLines(svgElement, chartContent, minDate, totalDays, dayWidth);
-        }
-
-        function getWeekNumber(d) {
-            // Copy date so don't modify original
-            d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-            // Set to nearest Thursday: current date + 4 - current day number
-            // Make Sunday's day number 7
-            d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-            // Get first day of year
-            const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-            // Calculate full weeks to nearest Thursday
-            const weekNo = Math.ceil(((d - yearStart) / (1000 * 60 * 60 * 24) + 1) / 7);
-            // Return week number
-            return weekNo;
-        }
-
-        function drawDependencyLines(svg, chartContent, minDate, totalDays, dayWidth) {
-            const svgNS = "http://www.w3.org/2000/svg";
-
-            // Remove existing lines without clearing defs
-            const existingLines = svg.querySelectorAll('line, polyline');
-            existingLines.forEach(line => line.remove());
-
-            tasks.forEach((task, index) => {
-                if (task.predecessor) {
-                    const predecessorTask = tasks.find(t => t.id == task.predecessor);
-                    if (predecessorTask) {
-                        const fromIndex = tasks.indexOf(predecessorTask);
-                        const fromTaskBar = chartContent.querySelector(`.task-bar[data-index="${fromIndex}"]`);
-                        const toTaskBar = chartContent.querySelector(`.task-bar[data-index="${index}"]`);
-
-                        // Get positions
-                        const fromX = parseFloat(fromTaskBar.style.left) + parseFloat(fromTaskBar.style.width);
-                        const fromY = parseFloat(fromTaskBar.style.top) + fromTaskBar.offsetHeight / 2;
-
-                        const toX = parseFloat(toTaskBar.style.left);
-                        const toY = parseFloat(toTaskBar.style.top) + toTaskBar.offsetHeight / 2;
-
-                        // Adjust Y positions to be relative to the SVG element
-                        const svgOffsetY = parseFloat(svg.style.top);
-
-                        const adjustedFromY = fromY - svgOffsetY;
-                        const adjustedToY = toY - svgOffsetY;
-
-                        // Create polyline for an elbow connector
-                        const line = document.createElementNS(svgNS, "polyline");
-                        const points = `${fromX},${adjustedFromY} ${(fromX + 20)},${adjustedFromY} ${(fromX + 20)},${adjustedToY} ${toX},${adjustedToY}`;
-                        line.setAttribute('points', points);
-
-                        line.setAttribute('fill', 'none');
-                        line.setAttribute('stroke', '#555');
-                        line.setAttribute('stroke-width', '2');
-                        line.setAttribute('marker-end', 'url(#arrowhead)');
-
-                        svg.appendChild(line);
-                    }
-                }
-            });
-        }
-
-        function addDragAndResizeEvents(taskBar, task, minDate, totalDays, dayWidth) {
-            let isResizingLeft = false;
-            let isResizingRight = false;
-            let isDragging = false;
-            let startX;
-            let originalLeft;
-            let originalWidth;
-            let originalStartDate;
-            let originalEndDate;
-
-            const leftHandle = taskBar.querySelector('.resize-handle.left');
-            const rightHandle = taskBar.querySelector('.resize-handle.right');
-
-            leftHandle.addEventListener('mousedown', function(e) {
-                isResizingLeft = true;
-                taskBar.classList.add('resizing');
-                startX = e.clientX;
-                originalLeft = parseFloat(taskBar.style.left);
-                originalWidth = parseFloat(taskBar.style.width);
-                originalStartDate = new Date(task.start);
-                e.stopPropagation();
-                e.preventDefault();
-            });
-
-            rightHandle.addEventListener('mousedown', function(e) {
-                isResizingRight = true;
-                taskBar.classList.add('resizing');
-                startX = e.clientX;
-                originalWidth = parseFloat(taskBar.style.width);
-                originalEndDate = new Date(task.end);
-                e.stopPropagation();
-                e.preventDefault();
-            });
-
-            taskBar.addEventListener('mousedown', function(e) {
-                if (e.target === leftHandle || e.target === rightHandle) return;
-                isDragging = true;
-                taskBar.classList.add('resizing');
-                startX = e.clientX;
-                originalLeft = parseFloat(taskBar.style.left);
-                originalStartDate = new Date(task.start);
-                originalEndDate = new Date(task.end);
-                e.preventDefault();
-            });
-
-            function onMouseMove(e) {
-                if (isResizingLeft) {
-                    const dx = e.clientX - startX;
-                    const daysChanged = Math.round(dx / (dayWidth));
-                    const newStartDate = new Date(originalStartDate);
-                    newStartDate.setDate(newStartDate.getDate() + daysChanged);
-                    if (newStartDate <= task.end) {
-                        task.start = newStartDate;
-                        renderGanttChart();
-                    }
-                } else if (isResizingRight) {
-                    const dx = e.clientX - startX;
-                    const daysChanged = Math.round(dx / (dayWidth));
-                    const newEndDate = new Date(originalEndDate);
-                    newEndDate.setDate(newEndDate.getDate() + daysChanged);
-                    if (newEndDate >= task.start) {
-                        task.end = newEndDate;
-                        renderGanttChart();
-                    }
-                } else if (isDragging) {
-                    const dx = e.clientX - startX;
-                    const daysChanged = Math.round(dx / (dayWidth));
-                    const newStartDate = new Date(originalStartDate);
-                    const newEndDate = new Date(originalEndDate);
-                    newStartDate.setDate(newStartDate.getDate() + daysChanged);
-                    newEndDate.setDate(newEndDate.getDate() + daysChanged);
-                    task.start = newStartDate;
-                    task.end = newEndDate;
-                    renderGanttChart();
-                }
-            }
-
-            function onMouseUp() {
-                if (isResizingLeft || isResizingRight || isDragging) {
-                    isResizingLeft = false;
-                    isResizingRight = false;
-                    isDragging = false;
-                    taskBar.classList.remove('resizing');
-
-                    document.removeEventListener('mousemove', onMouseMove);
-                    document.removeEventListener('mouseup', onMouseUp);
-                }
-            }
-
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-
-            // Open edit modal on double-click
-            taskBar.addEventListener('dblclick', function(e) {
-                openEditModal(task);
-            });
-        }
-
-        // Zoom functionality
-        const ganttChartContainer = document.getElementById('gantt-chart');
-        ganttChartContainer.addEventListener('wheel', function(e) {
-            e.preventDefault();
-            if (e.deltaY < 0) {
-                // Zoom in
-                zoomLevel = Math.min(zoomLevel + 0.1, 2); // Max zoom level 2x
-            } else {
-                // Zoom out
-                zoomLevel = Math.max(zoomLevel - 0.1, 0.1); // Min zoom level 0.1x
-            }
-            renderGanttChart();
-        });
-
-        // Edit modal elements
-        const editModal = document.getElementById('edit-modal');
-        const closeModal = document.getElementById('close-modal');
-        const editForm = document.getElementById('edit-form');
-        const editTaskName = document.getElementById('edit-task-name');
-        const editStartDate = document.getElementById('edit-start-date');
-        const editEndDate = document.getElementById('edit-end-date');
-        const editPredecessor = document.getElementById('edit-predecessor');
-        const editTaskColor = document.getElementById('edit-task-color');
-        const deleteTaskBtn = document.getElementById('delete-task');
-
-        let currentTask; // Variable to hold the task being edited
-
-        function openEditModal(task) {
-            currentTask = task;
-
-            // Populate the edit form with current task details
-            editTaskName.value = task.name;
-            editStartDate.value = task.start.toISOString().split('T')[0];
-            editEndDate.value = task.end.toISOString().split('T')[0];
-            editTaskColor.value = task.color;
-
-            // Populate predecessor options
-            editPredecessor.innerHTML = '<option value="">No predecessor</option>';
-            tasks.forEach(t => {
-                if (t.id !== task.id) {
-                    const option = document.createElement('option');
-                    option.value = t.id;
-                    option.textContent = t.name;
-                    editPredecessor.appendChild(option);
-                }
-            });
-
-            editPredecessor.value = task.predecessor;
-
-            editModal.style.display = 'block';
-        }
-
-        // Close the modal
-        closeModal.onclick = function() {
-            editModal.style.display = 'none';
-        };
-
-        // When the user clicks anywhere outside of the modal, close it
-        window.onclick = function(event) {
-            if (event.target == editModal) {
-                editModal.style.display = 'none';
-            }
-        };
-
-        // Handle form submission for editing
-        editForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-
-            const newName = editTaskName.value;
-            const newStartDate = new Date(editStartDate.value);
-            const newEndDate = new Date(editEndDate.value);
-            const newPredecessor = editPredecessor.value;
-            const newColor = editTaskColor.value;
-
-            if (newEndDate < newStartDate) {
-                alert('End date cannot be before start date.');
-                return;
-            }
-
-            // Update the task
-            currentTask.name = newName;
-            currentTask.start = newStartDate;
-            currentTask.end = newEndDate;
-            currentTask.predecessor = newPredecessor;
-            currentTask.color = newColor;
-
-            // Update the predecessor options in the main form
-            const predecessorSelect = document.getElementById('predecessor');
-            const options = predecessorSelect.options;
-            for (let i = 0; i < options.length; i++) {
-                if (options[i].value == currentTask.id) {
-                    options[i].textContent = newName;
-                    break;
-                }
-            }
-
-            renderGanttChart();
-
-            editModal.style.display = 'none';
-        });
-
-        // Handle task deletion
-        deleteTaskBtn.addEventListener('click', function() {
-            // Remove the task from the tasks array
-            const index = tasks.indexOf(currentTask);
-            if (index > -1) {
-                tasks.splice(index, 1);
-            }
-
-            // Remove options from predecessor selects
-            const predecessorSelects = [document.getElementById('predecessor'), document.getElementById('edit-predecessor')];
-            predecessorSelects.forEach(select => {
-                const options = select.options;
-                for (let i = options.length - 1; i >= 0; i--) {
-                    if (options[i].value == currentTask.id) {
-                        select.remove(i);
-                    }
-                }
-            });
-
-            // Update any tasks that had this task as predecessor
-            tasks.forEach(task => {
-                if (task.predecessor == currentTask.id) {
-                    task.predecessor = '';
-                }
-            });
-
-            renderGanttChart();
-
-            editModal.style.display = 'none';
-        });
-
-        // Export as JPG
-        document.getElementById('export-jpg').addEventListener('click', function() {
-            // Use the gantt-chart element to include the project title and chart content
-            html2canvas(document.getElementById('gantt-chart')).then(function(canvas) {
-                const link = document.createElement('a');
-                link.download = 'gantt-chart.jpg';
-                link.href = canvas.toDataURL('image/jpeg', 0.8);
-                link.click();
-            });
-        });
-
-        // Save Gantt Chart functionality
-        document.getElementById('save-chart').addEventListener('click', function() {
-            const data = {
-                projectTitle: projectTitle,
-                tasks: tasks
-            };
-            const dataStr = JSON.stringify(data, function(key, value) {
-                // Convert Date objects to ISO strings
-                if (this[key] instanceof Date) {
-                    return this[key].toISOString();
-                }
-                return value;
-            }, 2);
-
-            const blob = new Blob([dataStr], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-
-            const link = document.createElement('a');
-            link.download = 'gantt-chart.json';
-            link.href = url;
-            link.click();
-
-            URL.revokeObjectURL(url);
-        });
-
-        // Load Gantt Chart functionality
-        document.getElementById('load-chart').addEventListener('click', function() {
-            document.getElementById('file-input').click();
-        });
-
-        document.getElementById('file-input').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                try {
-                    const loadedData = JSON.parse(event.target.result, function(key, value) {
-                        // Convert ISO strings back to Date objects
-                        if (key === 'start' || key === 'end') {
-                            return new Date(value);
-                        }
-                        return value;
-                    });
-
-                    // Load project title
-                    projectTitle = loadedData.projectTitle || '';
-                    projectNameInput.value = projectTitle;
-
-                    // Clear current tasks
-                    tasks.length = 0;
-                    // Clear predecessor select options
-                    const predecessorSelect = document.getElementById('predecessor');
-                    predecessorSelect.innerHTML = '<option value="">No predecessor</option>';
-
-                    // Load tasks
-                    loadedData.tasks.forEach(task => {
-                        tasks.push(task);
-                        // Update predecessor options
-                        const option = document.createElement('option');
-                        option.value = task.id;
-                        option.textContent = task.name;
-                        predecessorSelect.appendChild(option);
-                    });
-
-                    renderGanttChart();
-                } catch (error) {
-                    alert('Failed to load Gantt chart. Please ensure the file is valid.');
-                }
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var contents = e.target.result;
+                parseCSV(contents);
             };
             reader.readAsText(file);
         });
-    </script>
 
+        var tasks = [];
+        var zoomLevel = 1;
+        var taskNameColumnWidth = 200; // Initial width
+        var isResizing = false;
+        var startX = 0;
+
+        function parseCSV(contents) {
+            var lines = contents.trim().split('\n');
+            var delimiter = contents.indexOf('\t') !== -1 ? '\t' : ','; // Detect delimiter
+            var headers = lines[0].split(delimiter);
+
+            // Normalize headers: remove spaces and make consistent property names
+            headers = headers.map(function(header) {
+                return header.trim().replace(/\s+/g, '');
+            });
+
+            tasks = [];
+
+            for (var i = 1; i < lines.length; i++) {
+                var line = lines[i].trim();
+                if (line === '') {
+                    continue;
+                }
+
+                var values = line.split(delimiter);
+
+                // Ensure values array has enough elements
+                while (values.length < headers.length) {
+                    values.push('');
+                }
+
+                // Remove quotes from values, if any
+                values = values.map(function(v) {
+                    return v.replace(/^"|"$/g, '').trim();
+                });
+
+                var task = {};
+                for (var j = 0; j < headers.length; j++) {
+                    var header = headers[j];
+                    var value = values[j];
+                    task[header] = value;
+                }
+
+                tasks.push(task);
+            }
+
+            renderGanttChart();
+        }
+
+        function renderGanttChart() {
+            var ganttChartContainer = document.getElementById('ganttChartContainer');
+            ganttChartContainer.innerHTML = ''; // Clear previous chart
+
+            // Calculate date range
+            var minDate = null;
+            var maxDate = null;
+
+            tasks.forEach(function(task) {
+                var startDate = new Date(task.Start);
+                var finishDate = new Date(task.Finish);
+
+                if (isNaN(startDate.getTime())) {
+                    console.error('Invalid start date for task:', task);
+                    return; // Skip this task
+                }
+                if (isNaN(finishDate.getTime())) {
+                    console.error('Invalid finish date for task:', task);
+                    return; // Skip this task
+                }
+
+                if (!minDate || startDate < minDate) {
+                    minDate = startDate;
+                }
+                if (!maxDate || finishDate > maxDate) {
+                    maxDate = finishDate;
+                }
+            });
+
+            var containerWidth = ganttChartContainer.offsetWidth;
+            var chartWidth = (containerWidth - taskNameColumnWidth) * zoomLevel;
+            var taskRowHeight = 30;
+            var headerHeight = 30;
+            var totalHeight = tasks.length * taskRowHeight + headerHeight;
+
+            // Create SVG element
+            var svgNS = 'http://www.w3.org/2000/svg';
+            var svg = document.createElementNS(svgNS, 'svg');
+            svg.setAttribute('height', totalHeight);
+            ganttChartContainer.appendChild(svg);
+
+            // Define clipPath for task names
+            var defs = document.createElementNS(svgNS, 'defs');
+            svg.appendChild(defs);
+
+            var clipPath = document.createElementNS(svgNS, 'clipPath');
+            clipPath.setAttribute('id', 'taskNameClip');
+            defs.appendChild(clipPath);
+
+            var clipRect = document.createElementNS(svgNS, 'rect');
+            clipRect.setAttribute('x', 0);
+            clipRect.setAttribute('y', headerHeight);
+            clipRect.setAttribute('width', taskNameColumnWidth - 5); // Subtract some padding
+            clipRect.setAttribute('height', totalHeight - headerHeight);
+            clipPath.appendChild(clipRect);
+
+            // Draw header background
+            var headerRect = document.createElementNS(svgNS, 'rect');
+            headerRect.setAttribute('x', 0);
+            headerRect.setAttribute('y', 0);
+            headerRect.setAttribute('width', taskNameColumnWidth + chartWidth);
+            headerRect.setAttribute('height', headerHeight);
+            headerRect.setAttribute('class', 'header');
+            svg.appendChild(headerRect);
+
+            // Draw "Task Name" header
+            var taskNameHeader = document.createElementNS(svgNS, 'text');
+            taskNameHeader.setAttribute('x', 5);
+            taskNameHeader.setAttribute('y', headerHeight / 2 + 5);
+            taskNameHeader.setAttribute('class', 'header-text');
+            taskNameHeader.textContent = 'Task Name';
+            svg.appendChild(taskNameHeader);
+
+            // Draw x-axis labels and grid lines
+            drawXAxis(svg, minDate, maxDate, chartWidth, headerHeight, totalHeight, taskNameColumnWidth);
+
+            // Draw tasks
+            var validTaskIndex = 0; // Index for tasks with valid dates
+            tasks.forEach(function(task, index) {
+                var startDate = new Date(task.Start);
+                var finishDate = new Date(task.Finish);
+
+                if (isNaN(startDate.getTime()) || isNaN(finishDate.getTime())) {
+                    // Skip tasks with invalid dates
+                    return;
+                }
+
+                var taskStartOffset = ((startDate - minDate) / (maxDate - minDate)) * chartWidth;
+                var taskDuration = ((finishDate - startDate) / (maxDate - minDate)) * chartWidth;
+
+                var yPosition = headerHeight + validTaskIndex * taskRowHeight;
+
+                // Draw task name background (optional)
+                var taskNameBg = document.createElementNS(svgNS, 'rect');
+                taskNameBg.setAttribute('x', 0);
+                taskNameBg.setAttribute('y', yPosition);
+                taskNameBg.setAttribute('width', taskNameColumnWidth);
+                taskNameBg.setAttribute('height', taskRowHeight);
+                taskNameBg.setAttribute('fill', '#fff');
+                taskNameBg.setAttribute('stroke', '#e0e0e0');
+                svg.appendChild(taskNameBg);
+
+                // Draw task name
+                var taskNameText = document.createElementNS(svgNS, 'text');
+                taskNameText.setAttribute('x', 5);
+                taskNameText.setAttribute('y', yPosition + taskRowHeight / 2 + 4); // Vertically center text
+                taskNameText.setAttribute('class', 'task-name');
+                taskNameText.setAttribute('clip-path', 'url(#taskNameClip)');
+                taskNameText.textContent = task.Name || 'No Name';
+
+                // Indent task names based on OutlineLevel
+                var outlineLevel = parseInt(task.OutlineLevel) || 1;
+                taskNameText.setAttribute('dx', (outlineLevel - 1) * 15);
+
+                // Add tooltip
+                var title = document.createElementNS(svgNS, 'title');
+                title.textContent = task.Name || 'No Name';
+                taskNameText.appendChild(title);
+
+                svg.appendChild(taskNameText);
+
+                // Determine task bar color based on OutlineLevel
+                var taskColor = '#3498db'; // Default blue color
+                if (outlineLevel === 1) {
+                    taskColor = '#7f8c8d'; // Grey for Outline Level 1
+                } else if (outlineLevel === 2) {
+                    taskColor = '#3498db'; // Current blue for Outline Level 2
+                } else if (outlineLevel >= 3) {
+                    taskColor = '#85c1e9'; // Lighter blue for Outline Level 3 and above
+                }
+
+                // Draw task bar
+                var rect = document.createElementNS(svgNS, 'rect');
+                rect.setAttribute('x', taskNameColumnWidth + taskStartOffset); // Offset by task name column width
+                rect.setAttribute('y', yPosition + 5); // Slight vertical padding
+                rect.setAttribute('width', taskDuration);
+                rect.setAttribute('height', taskRowHeight - 10); // Vertical padding
+                rect.setAttribute('fill', taskColor);
+                rect.setAttribute('class', 'task-bar');
+                rect.setAttribute('data-index', index);
+
+                svg.appendChild(rect);
+
+                validTaskIndex++; // Increment only for valid tasks
+            });
+
+            // Adjust SVG width to accommodate content
+            var requiredWidth = taskNameColumnWidth + chartWidth; // Total width
+            svg.setAttribute('width', requiredWidth);
+
+            // Set up zoom controls
+            document.getElementById('zoomInButton').onclick = function() {
+                zoomLevel *= 1.5;
+                renderGanttChart();
+            };
+
+            document.getElementById('zoomOutButton').onclick = function() {
+                zoomLevel /= 1.5;
+                renderGanttChart();
+            };
+
+            // Draw separator line and make it draggable
+            drawSeparatorLine(svg, headerHeight, totalHeight);
+        }
+
+        function drawXAxis(svg, minDate, maxDate, chartWidth, headerHeight, totalHeight, taskNameColumnWidth) {
+            var svgNS = 'http://www.w3.org/2000/svg';
+
+            // Determine time scale based on zoom level
+            var timeSpan = maxDate - minDate;
+            var pixelsPerDay = chartWidth / (timeSpan / (1000 * 3600 * 24));
+
+            var labelInterval; // in milliseconds
+            var dateFormatOptions;
+
+            if (pixelsPerDay * zoomLevel > 80) {
+                // Show days
+                labelInterval = 1000 * 3600 * 24; // One day
+                dateFormatOptions = { day: 'numeric', month: 'short' };
+            } else if (pixelsPerDay * zoomLevel > 20) {
+                // Show weeks
+                labelInterval = 1000 * 3600 * 24 * 7; // One week
+                dateFormatOptions = { day: 'numeric', month: 'short' };
+            } else {
+                // Show months
+                labelInterval = 1000 * 3600 * 24 * 30; // Approximate one month
+                dateFormatOptions = { month: 'short', year: 'numeric' };
+            }
+
+            // Draw labels and grid lines
+            for (var time = minDate.getTime(); time <= maxDate.getTime(); time += labelInterval) {
+                var xPos = taskNameColumnWidth + ((time - minDate.getTime()) / (maxDate - minDate)) * chartWidth;
+
+                // Grid line
+                var line = document.createElementNS(svgNS, 'line');
+                line.setAttribute('x1', xPos);
+                line.setAttribute('y1', headerHeight);
+                line.setAttribute('x2', xPos);
+                line.setAttribute('y2', totalHeight);
+                line.setAttribute('class', 'axis-line');
+                svg.appendChild(line);
+
+                // Label
+                if (xPos > taskNameColumnWidth + 30) { // Ensure labels don't overlap with Task Name column
+                    var label = document.createElementNS(svgNS, 'text');
+                    label.setAttribute('x', xPos);
+                    label.setAttribute('y', headerHeight / 2 + 5);
+                    label.setAttribute('class', 'axis-label');
+                    label.textContent = new Date(time).toLocaleDateString('en-US', dateFormatOptions);
+                    svg.appendChild(label);
+                }
+            }
+
+            // Draw vertical line separating task names and chart
+            // This line will be draggable
+            var separatorLine = document.createElementNS(svgNS, 'line');
+            separatorLine.setAttribute('x1', taskNameColumnWidth);
+            separatorLine.setAttribute('y1', 0);
+            separatorLine.setAttribute('x2', taskNameColumnWidth);
+            separatorLine.setAttribute('y2', totalHeight);
+            separatorLine.setAttribute('stroke', '#ccc');
+            separatorLine.setAttribute('stroke-width', '3');
+            separatorLine.setAttribute('class', 'separator-line');
+            separatorLine.style.cursor = 'col-resize';
+            svg.appendChild(separatorLine);
+
+            // Event listeners for resizing
+            separatorLine.addEventListener('mousedown', startResizing);
+            svg.addEventListener('mousemove', resizing);
+            svg.addEventListener('mouseup', stopResizing);
+            svg.addEventListener('mouseleave', stopResizing);
+        }
+
+        function drawSeparatorLine(svg, headerHeight, totalHeight) {
+            // The separator line is already drawn in drawXAxis and event listeners are attached there
+            // This function is kept for compatibility
+        }
+
+        function startResizing(e) {
+            isResizing = true;
+            startX = e.clientX;
+            e.preventDefault();
+        }
+
+        function resizing(e) {
+            if (!isResizing) return;
+            var dx = e.clientX - startX;
+            startX = e.clientX;
+            taskNameColumnWidth += dx;
+            if (taskNameColumnWidth < 100) taskNameColumnWidth = 100; // Minimum width
+            if (taskNameColumnWidth > 500) taskNameColumnWidth = 500; // Maximum width
+            renderGanttChart();
+        }
+
+        function stopResizing(e) {
+            isResizing = false;
+        }
+    </script>
 </body>
 </html>
