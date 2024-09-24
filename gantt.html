@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Gantt Chart Tool with Dependencies, Buffer, and Tooltips</title>
+    <title>Gantt Chart Tool with Resource Filter</title>
     <style>
         /* Ensure the box model includes padding and borders in the element's total size */
         *, *::before, *::after {
@@ -19,6 +19,10 @@
         }
 
         #controls button {
+            margin-right: 5px;
+        }
+
+        #controls select {
             margin-right: 5px;
         }
 
@@ -114,11 +118,14 @@
     </style>
 </head>
 <body>
-    <h1>Gantt Chart Tool with Dependencies, Buffer, and Tooltips</h1>
+    <h1>Gantt Chart Tool with Resource Filter</h1>
     <div id="controls">
         <input type="file" id="csvFileInput" accept=".csv" />
         <button id="zoomInButton">Zoom In</button>
         <button id="zoomOutButton">Zoom Out</button>
+        <select id="resourceFilter">
+            <!-- Options will be populated dynamically -->
+        </select>
     </div>
     <div id="ganttChartContainer">
         <!-- Gantt chart will be rendered here -->
@@ -146,11 +153,14 @@
         var taskNameColumnWidth = 200; // Initial width
         var isResizing = false;
         var startX = 0;
+        var filteredTasks = [];
+        var allResources = [];
+        var resourceFilter = 'All';
 
         function parseCSV(contents) {
             var lines = contents.trim().split('\n');
             var delimiter = contents.indexOf('\t') !== -1 ? '\t' : ','; // Detect delimiter
-            var headers = lines[0].split(delimiter);
+            var headers = parseCSVLine(lines[0], delimiter);
 
             // Normalize headers: remove spaces and make consistent property names
             headers = headers.map(function(header) {
@@ -165,11 +175,17 @@
                     continue;
                 }
 
-                var values = line.split(delimiter);
+                var values = parseCSVLine(line, delimiter);
 
-                // Ensure values array has enough elements
-                while (values.length < headers.length) {
-                    values.push('');
+                // Ensure values array has exactly as many elements as headers
+                if (values.length > headers.length) {
+                    // Combine extra values into the last field
+                    values[headers.length - 1] = values.slice(headers.length - 1).join(delimiter);
+                    values = values.slice(0, headers.length);
+                } else {
+                    while (values.length < headers.length) {
+                        values.push('');
+                    }
                 }
 
                 // Remove quotes from values, if any
@@ -187,18 +203,108 @@
                 tasks.push(task);
             }
 
+            // Populate the resource filter dropdown
+            populateResourceFilter();
+
             renderGanttChart();
+        }
+
+        function parseCSVLine(line, delimiter) {
+            var values = [];
+            var current = '';
+            var insideQuotes = false;
+            for (var i = 0; i < line.length; i++) {
+                var char = line[i];
+                if (char === '"') {
+                    insideQuotes = !insideQuotes;
+                } else if (char === delimiter && !insideQuotes) {
+                    values.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            values.push(current);
+            return values;
+        }
+
+        function populateResourceFilter() {
+            var resourceSet = new Set();
+            tasks.forEach(function(task) {
+                if (task.ResourceNames && task.ResourceNames.trim() !== '') {
+                    resourceSet.add(task.ResourceNames.trim());
+                }
+            });
+
+            allResources = Array.from(resourceSet).sort();
+            allResources.unshift('All'); // Add 'All' at the beginning
+
+            var resourceFilterSelect = document.getElementById('resourceFilter');
+            resourceFilterSelect.innerHTML = ''; // Clear previous options
+
+            allResources.forEach(function(resource) {
+                var option = document.createElement('option');
+                option.value = resource;
+                option.textContent = resource;
+                resourceFilterSelect.appendChild(option);
+            });
+
+            resourceFilterSelect.value = resourceFilter; // Set the current filter
+            resourceFilterSelect.addEventListener('change', function() {
+                resourceFilter = this.value;
+                renderGanttChart();
+            });
+        }
+
+        function filterTasks() {
+            if (resourceFilter === 'All') {
+                filteredTasks = tasks.slice(); // Copy all tasks
+                return;
+            }
+
+            // Filter tasks by resource
+            var tasksWithResource = tasks.filter(function(task) {
+                return task.ResourceNames && task.ResourceNames.trim() === resourceFilter;
+            });
+
+            // Collect IDs of tasks with the selected resource
+            var taskIDsWithResource = tasksWithResource.map(function(task) {
+                return task.ID;
+            });
+
+            // Include predecessor tasks
+            var includedTaskIDs = new Set(taskIDsWithResource);
+            tasksWithResource.forEach(function(task) {
+                if (task.Predecessors) {
+                    var predecessors = task.Predecessors.split(',');
+                    predecessors.forEach(function(predecessorStr) {
+                        var match = predecessorStr.trim().match(/^(\d+)/);
+                        if (match) {
+                            var predecessorID = match[1];
+                            includedTaskIDs.add(predecessorID);
+                        }
+                    });
+                }
+            });
+
+            // Collect all tasks that should be included
+            filteredTasks = tasks.filter(function(task) {
+                return includedTaskIDs.has(task.ID);
+            });
         }
 
         function renderGanttChart() {
             var ganttChartContainer = document.getElementById('ganttChartContainer');
             ganttChartContainer.innerHTML = ''; // Clear previous chart
 
+            // Filter tasks based on selected resource
+            filterTasks();
+
             // Calculate date range
             var minDate = null;
             var maxDate = null;
 
-            tasks.forEach(function(task) {
+            filteredTasks.forEach(function(task) {
                 var startDate = new Date(task.Start);
                 var finishDate = new Date(task.Finish);
 
@@ -219,6 +325,11 @@
                 }
             });
 
+            if (!minDate || !maxDate) {
+                // No valid tasks to display
+                return;
+            }
+
             // Add buffer before and after the date range
             var bufferDuration = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
             minDate = new Date(minDate.getTime() - bufferDuration);
@@ -228,7 +339,7 @@
             var chartWidth = (containerWidth - taskNameColumnWidth) * zoomLevel;
             var taskRowHeight = 30;
             var headerHeight = 30;
-            var totalHeight = tasks.length * taskRowHeight + headerHeight;
+            var totalHeight = filteredTasks.length * taskRowHeight + headerHeight;
 
             // Create SVG element
             var svgNS = 'http://www.w3.org/2000/svg';
@@ -290,7 +401,7 @@
             // Map task IDs to their positions and data
             var taskMap = {};
             var validTaskIndex = 0; // Index for tasks with valid dates
-            tasks.forEach(function(task, index) {
+            filteredTasks.forEach(function(task, index) {
                 var startDate = new Date(task.Start);
                 var finishDate = new Date(task.Finish);
 
@@ -379,7 +490,7 @@
             });
 
             // Draw dependency lines
-            drawDependencies(svg, tasks, taskMap, taskNameColumnWidth);
+            drawDependencies(svg, filteredTasks, taskMap, taskNameColumnWidth);
 
             // Adjust SVG width to accommodate content
             var requiredWidth = taskNameColumnWidth + chartWidth; // Total width
