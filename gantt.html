@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Gantt Chart Tool</title>
+    <title>Gantt Chart Tool with Dependencies</title>
     <style>
         /* Ensure the box model includes padding and borders in the element's total size */
         *, *::before, *::after {
@@ -88,10 +88,18 @@
         .separator-line {
             cursor: col-resize;
         }
+
+        /* Style for dependency lines */
+        .dependency-line {
+            stroke: #555;
+            stroke-width: 1.5;
+            fill: none;
+            marker-end: url(#arrowhead);
+        }
     </style>
 </head>
 <body>
-    <h1>Gantt Chart Tool</h1>
+    <h1>Gantt Chart Tool with Dependencies</h1>
     <div id="controls">
         <input type="file" id="csvFileInput" accept=".csv" />
         <button id="zoomInButton">Zoom In</button>
@@ -205,10 +213,26 @@
             svg.setAttribute('height', totalHeight);
             ganttChartContainer.appendChild(svg);
 
-            // Define clipPath for task names
+            // Define markers for dependency lines
             var defs = document.createElementNS(svgNS, 'defs');
             svg.appendChild(defs);
 
+            var marker = document.createElementNS(svgNS, 'marker');
+            marker.setAttribute('id', 'arrowhead');
+            marker.setAttribute('markerWidth', '10');
+            marker.setAttribute('markerHeight', '7');
+            marker.setAttribute('refX', '0');
+            marker.setAttribute('refY', '3.5');
+            marker.setAttribute('orient', 'auto');
+            marker.setAttribute('markerUnits', 'strokeWidth');
+
+            var markerPath = document.createElementNS(svgNS, 'path');
+            markerPath.setAttribute('d', 'M0,0 L0,7 L10,3.5 z');
+            markerPath.setAttribute('fill', '#555');
+            marker.appendChild(markerPath);
+            defs.appendChild(marker);
+
+            // Define clipPath for task names
             var clipPath = document.createElementNS(svgNS, 'clipPath');
             clipPath.setAttribute('id', 'taskNameClip');
             defs.appendChild(clipPath);
@@ -240,7 +264,8 @@
             // Draw x-axis labels and grid lines
             drawXAxis(svg, minDate, maxDate, chartWidth, headerHeight, totalHeight, taskNameColumnWidth);
 
-            // Draw tasks
+            // Map task IDs to their positions and data
+            var taskMap = {};
             var validTaskIndex = 0; // Index for tasks with valid dates
             tasks.forEach(function(task, index) {
                 var startDate = new Date(task.Start);
@@ -255,6 +280,15 @@
                 var taskDuration = ((finishDate - startDate) / (maxDate - minDate)) * chartWidth;
 
                 var yPosition = headerHeight + validTaskIndex * taskRowHeight;
+
+                // Store task position data
+                taskMap[task.ID] = {
+                    x: taskNameColumnWidth + taskStartOffset,
+                    y: yPosition,
+                    width: taskDuration,
+                    height: taskRowHeight - 10, // Vertical padding
+                    index: validTaskIndex
+                };
 
                 // Draw task name background (optional)
                 var taskNameBg = document.createElementNS(svgNS, 'rect');
@@ -309,6 +343,9 @@
 
                 validTaskIndex++; // Increment only for valid tasks
             });
+
+            // Draw dependency lines
+            drawDependencies(svg, tasks, taskMap, taskNameColumnWidth);
 
             // Adjust SVG width to accommodate content
             var requiredWidth = taskNameColumnWidth + chartWidth; // Total width
@@ -395,6 +432,83 @@
             svg.addEventListener('mousemove', resizing);
             svg.addEventListener('mouseup', stopResizing);
             svg.addEventListener('mouseleave', stopResizing);
+        }
+
+        function drawDependencies(svg, tasks, taskMap, taskNameColumnWidth) {
+            var svgNS = 'http://www.w3.org/2000/svg';
+
+            tasks.forEach(function(task) {
+                if (!task.Predecessors || !taskMap[task.ID]) {
+                    return; // Skip if no predecessors or task not mapped
+                }
+
+                var predecessors = task.Predecessors.split(',');
+
+                predecessors.forEach(function(predecessorStr) {
+                    var match = predecessorStr.trim().match(/^(\d+)(FS|SS|FF|SF)?$/i);
+                    if (!match) return;
+
+                    var predecessorID = match[1];
+                    var dependencyType = match[2] || 'FS'; // Default to Finish-to-Start
+
+                    var predecessorTask = taskMap[predecessorID];
+                    var successorTask = taskMap[task.ID];
+
+                    if (!predecessorTask || !successorTask) return;
+
+                    // Calculate positions based on dependency type
+                    var startX, startY, endX, endY;
+
+                    // Adjust positions for arrow drawing
+                    var gap = 5; // Gap between task bars and dependency lines
+
+                    if (dependencyType.toUpperCase() === 'FS') {
+                        // Finish-to-Start
+                        startX = predecessorTask.x + predecessorTask.width;
+                        startY = predecessorTask.y + predecessorTask.height / 2 + 5;
+                        endX = successorTask.x;
+                        endY = successorTask.y + successorTask.height / 2 + 5;
+                    } else if (dependencyType.toUpperCase() === 'SS') {
+                        // Start-to-Start
+                        startX = predecessorTask.x;
+                        startY = predecessorTask.y + predecessorTask.height / 2 + 5;
+                        endX = successorTask.x;
+                        endY = successorTask.y + successorTask.height / 2 + 5;
+                    } else if (dependencyType.toUpperCase() === 'FF') {
+                        // Finish-to-Finish
+                        startX = predecessorTask.x + predecessorTask.width;
+                        startY = predecessorTask.y + predecessorTask.height / 2 + 5;
+                        endX = successorTask.x + successorTask.width;
+                        endY = successorTask.y + successorTask.height / 2 + 5;
+                    } else if (dependencyType.toUpperCase() === 'SF') {
+                        // Start-to-Finish
+                        startX = predecessorTask.x;
+                        startY = predecessorTask.y + predecessorTask.height / 2 + 5;
+                        endX = successorTask.x + successorTask.width;
+                        endY = successorTask.y + successorTask.height / 2 + 5;
+                    } else {
+                        // Unknown dependency type
+                        return;
+                    }
+
+                    // Draw the dependency line
+                    var path = document.createElementNS(svgNS, 'path');
+                    path.setAttribute('class', 'dependency-line');
+
+                    // Create a path that goes from the start point to the end point with right angles
+                    var d = [
+                        'M', startX, startY,
+                        'L', startX + gap, startY,
+                        'L', startX + gap, endY,
+                        'L', endX - gap, endY,
+                        'L', endX, endY
+                    ].join(' ');
+
+                    path.setAttribute('d', d);
+
+                    svg.appendChild(path);
+                });
+            });
         }
 
         function drawSeparatorLine(svg, headerHeight, totalHeight) {
