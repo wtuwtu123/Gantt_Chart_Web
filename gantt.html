@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Gantt Chart Tool with Dependencies and Buffer</title>
+    <title>Gantt Chart Tool with Dependencies, Buffer, and Tooltips</title>
     <style>
         /* Ensure the box model includes padding and borders in the element's total size */
         *, *::before, *::after {
@@ -96,10 +96,25 @@
             fill: none;
             marker-end: url(#arrowhead);
         }
+
+        /* Tooltip styling */
+        #tooltip {
+            position: absolute;
+            pointer-events: none;
+            background-color: rgba(50, 50, 50, 0.9);
+            color: #fff;
+            padding: 5px;
+            border-radius: 4px;
+            font-size: 12px;
+            max-width: 300px;
+            display: none;
+            z-index: 1000;
+            white-space: pre-wrap;
+        }
     </style>
 </head>
 <body>
-    <h1>Gantt Chart Tool with Dependencies and Buffer</h1>
+    <h1>Gantt Chart Tool with Dependencies, Buffer, and Tooltips</h1>
     <div id="controls">
         <input type="file" id="csvFileInput" accept=".csv" />
         <button id="zoomInButton">Zoom In</button>
@@ -108,6 +123,9 @@
     <div id="ganttChartContainer">
         <!-- Gantt chart will be rendered here -->
     </div>
+
+    <!-- Tooltip for displaying Resource Names and Notes -->
+    <div id="tooltip"></div>
 
     <script>
         document.getElementById('csvFileInput').addEventListener('change', function(e) {
@@ -317,7 +335,7 @@
                 var outlineLevel = parseInt(task.OutlineLevel) || 1;
                 taskNameText.setAttribute('dx', (outlineLevel - 1) * 15);
 
-                // Add tooltip
+                // Add tooltip to task name (optional)
                 var title = document.createElementNS(svgNS, 'title');
                 title.textContent = task.Name || 'No Name';
                 taskNameText.appendChild(title);
@@ -343,6 +361,17 @@
                 rect.setAttribute('fill', taskColor);
                 rect.setAttribute('class', 'task-bar');
                 rect.setAttribute('data-index', index);
+
+                // Add event listeners for tooltip
+                rect.addEventListener('mouseover', function(e) {
+                    showTooltip(e, task);
+                });
+                rect.addEventListener('mousemove', function(e) {
+                    moveTooltip(e);
+                });
+                rect.addEventListener('mouseout', function(e) {
+                    hideTooltip();
+                });
 
                 svg.appendChild(rect);
 
@@ -539,6 +568,54 @@
 
         function stopResizing(e) {
             isResizing = false;
+        }
+
+        // Tooltip functions
+        var tooltip = document.getElementById('tooltip');
+
+        function showTooltip(e, task) {
+            var resource = task.ResourceNames || 'No Resource';
+            var notes = task.Notes || '';
+
+            // Strip HTML tags from notes
+            notes = stripHTMLTags(notes);
+
+            var content = '';
+            if (resource) {
+                content += '<strong>Resource:</strong> ' + resource + '<br>';
+            }
+            if (notes) {
+                content += '<strong>Notes:</strong><br>' + notes;
+            }
+
+            tooltip.innerHTML = content;
+            tooltip.style.display = 'block';
+            moveTooltip(e);
+        }
+
+        function moveTooltip(e) {
+            var ganttChartContainer = document.getElementById('ganttChartContainer');
+            var rect = ganttChartContainer.getBoundingClientRect();
+            var x = e.clientX - rect.left + ganttChartContainer.scrollLeft + 10; // Offset to prevent cursor overlap
+            var y = e.clientY - rect.top + ganttChartContainer.scrollTop + 10;
+            tooltip.style.left = x + 'px';
+            tooltip.style.top = y + 'px';
+        }
+
+        function hideTooltip() {
+            tooltip.style.display = 'none';
+        }
+
+        function stripHTMLTags(html) {
+            // Replace <br> and <br/> with newline
+            html = html.replace(/<br\s*\/?>/gi, '\n');
+
+            // Remove all other HTML tags
+            var tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            var text = tmp.textContent || tmp.innerText || '';
+
+            return text.trim();
         }
     </script>
 </body>
