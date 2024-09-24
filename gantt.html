@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Gantt Chart Tool with Dependencies</title>
+    <title>Gantt Chart Tool with Dependencies and Buffer</title>
     <style>
         /* Ensure the box model includes padding and borders in the element's total size */
         *, *::before, *::after {
@@ -99,7 +99,7 @@
     </style>
 </head>
 <body>
-    <h1>Gantt Chart Tool with Dependencies</h1>
+    <h1>Gantt Chart Tool with Dependencies and Buffer</h1>
     <div id="controls">
         <input type="file" id="csvFileInput" accept=".csv" />
         <button id="zoomInButton">Zoom In</button>
@@ -200,6 +200,11 @@
                     maxDate = finishDate;
                 }
             });
+
+            // Add buffer before and after the date range
+            var bufferDuration = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+            minDate = new Date(minDate.getTime() - bufferDuration);
+            maxDate = new Date(maxDate.getTime() + bufferDuration);
 
             var containerWidth = ganttChartContainer.offsetWidth;
             var chartWidth = (containerWidth - taskNameColumnWidth) * zoomLevel;
