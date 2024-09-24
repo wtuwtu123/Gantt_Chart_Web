@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Gantt Chart Tool with Resource Filter</title>
+    <title>Gantt Chart Tool with Export Feature</title>
     <style>
         /* Ensure the box model includes padding and borders in the element's total size */
         *, *::before, *::after {
@@ -118,7 +118,7 @@
     </style>
 </head>
 <body>
-    <h1>Gantt Chart Tool with Resource Filter</h1>
+    <h1>Gantt Chart Tool with Export Feature</h1>
     <div id="controls">
         <input type="file" id="csvFileInput" accept=".csv" />
         <button id="zoomInButton">Zoom In</button>
@@ -126,6 +126,7 @@
         <select id="resourceFilter">
             <!-- Options will be populated dynamically -->
         </select>
+        <button id="exportButton">Export</button>
     </div>
     <div id="ganttChartContainer">
         <!-- Gantt chart will be rendered here -->
@@ -156,11 +157,15 @@
         var filteredTasks = [];
         var allResources = [];
         var resourceFilter = 'All';
+        var originalHeaders = []; // Store original headers for export
 
         function parseCSV(contents) {
             var lines = contents.trim().split('\n');
             var delimiter = contents.indexOf('\t') !== -1 ? '\t' : ','; // Detect delimiter
             var headers = parseCSVLine(lines[0], delimiter);
+
+            // Store the original headers for export
+            originalHeaders = headers.slice();
 
             // Normalize headers: remove spaces and make consistent property names
             headers = headers.map(function(header) {
@@ -727,6 +732,44 @@
             var text = tmp.textContent || tmp.innerText || '';
 
             return text.trim();
+        }
+
+        // Export functionality
+        document.getElementById('exportButton').addEventListener('click', function() {
+            exportCSV();
+        });
+
+        function exportCSV() {
+            var csvContent = '';
+            var delimiter = ','; // Use comma as delimiter
+
+            // Add headers
+            csvContent += originalHeaders.join(delimiter) + '\n';
+
+            // Add task data
+            tasks.forEach(function(task) {
+                var row = [];
+                originalHeaders.forEach(function(header) {
+                    var value = task[header.trim().replace(/\s+/g, '')] || '';
+                    // Escape quotes and wrap value in quotes if it contains the delimiter or newline
+                    if (value.indexOf(delimiter) >= 0 || value.indexOf('\n') >= 0 || value.indexOf('"') >= 0) {
+                        value = '"' + value.replace(/"/g, '""') + '"';
+                    }
+                    row.push(value);
+                });
+                csvContent += row.join(delimiter) + '\n';
+            });
+
+            // Create a Blob and trigger download
+            var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'exported_tasks.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
     </script>
 </body>
