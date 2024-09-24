@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Gantt Chart Tool with Export Feature</title>
+    <title>Gantt Chart Tool with Collapse/Expand Feature</title>
     <style>
-        /* Ensure the box model includes padding and borders in the element's total size */
+        /* Basic styles and box model adjustments */
         *, *::before, *::after {
             box-sizing: border-box;
         }
@@ -18,19 +18,14 @@
             margin: 10px;
         }
 
-        #controls button {
-            margin-right: 5px;
-        }
-
-        #controls select {
+        #controls button, #controls select {
             margin-right: 5px;
         }
 
         #ganttChartContainer {
             width: 100%;
-            /* Adjust the height to account for the header and controls */
-            height: calc(100vh - 130px); /* Adjust this value if necessary */
-            overflow: auto; /* Enable both horizontal and vertical scrolling */
+            height: calc(100vh - 130px);
+            overflow: auto;
             position: relative;
         }
 
@@ -42,6 +37,13 @@
             fill: #000;
             font-size: 12px;
             text-anchor: start;
+            cursor: pointer;
+        }
+
+        .collapsed-indicator {
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
         }
 
         .task-bar {
@@ -72,9 +74,9 @@
             text-anchor: start;
         }
 
-        /* Customize scrollbar for WebKit-based browsers (Chrome, Edge, Safari) */
+        /* Scrollbar customization */
         #ganttChartContainer::-webkit-scrollbar {
-            height: 16px; /* Increase the scrollbar height */
+            height: 16px;
         }
 
         #ganttChartContainer::-webkit-scrollbar-thumb {
@@ -82,18 +84,17 @@
             border-radius: 8px;
         }
 
-        /* Optional: For Firefox, use scrollbar-width and scrollbar-color */
         #ganttChartContainer {
             scrollbar-width: thin;
             scrollbar-color: #ccc transparent;
         }
 
-        /* Cursor style for the draggable separator */
+        /* Draggable separator cursor style */
         .separator-line {
             cursor: col-resize;
         }
 
-        /* Style for dependency lines */
+        /* Dependency lines style */
         .dependency-line {
             stroke: #555;
             stroke-width: 1.5;
@@ -118,11 +119,13 @@
     </style>
 </head>
 <body>
-    <h1>Gantt Chart Tool with Export Feature</h1>
+    <h1>Gantt Chart Tool with Collapse/Expand Feature</h1>
     <div id="controls">
         <input type="file" id="csvFileInput" accept=".csv" />
         <button id="zoomInButton">Zoom In</button>
         <button id="zoomOutButton">Zoom Out</button>
+        <button id="collapseAllButton">Collapse All</button>
+        <button id="expandAllButton">Expand All</button>
         <select id="resourceFilter">
             <!-- Options will be populated dynamically -->
         </select>
@@ -136,6 +139,7 @@
     <div id="tooltip"></div>
 
     <script>
+        // File input handling
         document.getElementById('csvFileInput').addEventListener('change', function(e) {
             var file = e.target.files[0];
             if (!file) {
@@ -149,25 +153,25 @@
             reader.readAsText(file);
         });
 
+        // Global variables
         var tasks = [];
         var zoomLevel = 1;
-        var taskNameColumnWidth = 200; // Initial width
+        var taskNameColumnWidth = 200;
         var isResizing = false;
         var startX = 0;
         var filteredTasks = [];
         var allResources = [];
         var resourceFilter = 'All';
-        var originalHeaders = []; // Store original headers for export
+        var originalHeaders = [];
 
+        // CSV parsing functions
         function parseCSV(contents) {
             var lines = contents.trim().split('\n');
-            var delimiter = contents.indexOf('\t') !== -1 ? '\t' : ','; // Detect delimiter
+            var delimiter = contents.indexOf('\t') !== -1 ? '\t' : ',';
             var headers = parseCSVLine(lines[0], delimiter);
 
-            // Store the original headers for export
             originalHeaders = headers.slice();
 
-            // Normalize headers: remove spaces and make consistent property names
             headers = headers.map(function(header) {
                 return header.trim().replace(/\s+/g, '');
             });
@@ -176,15 +180,11 @@
 
             for (var i = 1; i < lines.length; i++) {
                 var line = lines[i].trim();
-                if (line === '') {
-                    continue;
-                }
+                if (line === '') continue;
 
                 var values = parseCSVLine(line, delimiter);
 
-                // Ensure values array has exactly as many elements as headers
                 if (values.length > headers.length) {
-                    // Combine extra values into the last field
                     values[headers.length - 1] = values.slice(headers.length - 1).join(delimiter);
                     values = values.slice(0, headers.length);
                 } else {
@@ -193,7 +193,6 @@
                     }
                 }
 
-                // Remove quotes from values, if any
                 values = values.map(function(v) {
                     return v.replace(/^"|"$/g, '').trim();
                 });
@@ -208,9 +207,7 @@
                 tasks.push(task);
             }
 
-            // Populate the resource filter dropdown
             populateResourceFilter();
-
             renderGanttChart();
         }
 
@@ -233,6 +230,7 @@
             return values;
         }
 
+        // Populate resource filter dropdown
         function populateResourceFilter() {
             var resourceSet = new Set();
             tasks.forEach(function(task) {
@@ -242,10 +240,10 @@
             });
 
             allResources = Array.from(resourceSet).sort();
-            allResources.unshift('All'); // Add 'All' at the beginning
+            allResources.unshift('All');
 
             var resourceFilterSelect = document.getElementById('resourceFilter');
-            resourceFilterSelect.innerHTML = ''; // Clear previous options
+            resourceFilterSelect.innerHTML = '';
 
             allResources.forEach(function(resource) {
                 var option = document.createElement('option');
@@ -254,72 +252,144 @@
                 resourceFilterSelect.appendChild(option);
             });
 
-            resourceFilterSelect.value = resourceFilter; // Set the current filter
+            resourceFilterSelect.value = resourceFilter;
             resourceFilterSelect.addEventListener('change', function() {
                 resourceFilter = this.value;
                 renderGanttChart();
             });
         }
 
+        // Build task hierarchy
+        function buildTaskHierarchy() {
+            filteredTasks.forEach(function(task) {
+                task.children = [];
+                task.collapsed = task.collapsed || false;
+            });
+
+            for (var i = 0; i < filteredTasks.length; i++) {
+                var task = filteredTasks[i];
+                var outlineLevel = parseInt(task.OutlineLevel) || 1;
+                if (outlineLevel > 1) {
+                    for (var j = i - 1; j >= 0; j--) {
+                        var potentialParent = filteredTasks[j];
+                        var parentOutlineLevel = parseInt(potentialParent.OutlineLevel) || 1;
+                        if (parentOutlineLevel < outlineLevel) {
+                            potentialParent.children.push(task);
+                            task.parent = potentialParent;
+                            break;
+                        }
+                    }
+                } else {
+                    task.parent = null;
+                }
+            }
+        }
+
+        // Filter tasks based on resource
         function filterTasks() {
+            tasks.forEach(function(task) {
+                task.visible = false;
+            });
+
             if (resourceFilter === 'All') {
-                filteredTasks = tasks.slice(); // Copy all tasks
-                return;
+                filteredTasks = tasks.slice();
+            } else {
+                var tasksWithResource = tasks.filter(function(task) {
+                    return task.ResourceNames && task.ResourceNames.trim() === resourceFilter;
+                });
+
+                var taskIDsWithResource = tasksWithResource.map(function(task) {
+                    return task.ID;
+                });
+
+                var includedTaskIDs = new Set(taskIDsWithResource);
+
+                tasksWithResource.forEach(function(task) {
+                    if (task.Predecessors) {
+                        var predecessors = task.Predecessors.split(',');
+                        predecessors.forEach(function(predecessorStr) {
+                            var match = predecessorStr.trim().match(/^(\d+)/);
+                            if (match) {
+                                var predecessorID = match[1];
+                                includedTaskIDs.add(predecessorID);
+                            }
+                        });
+                    }
+                });
+
+                // Include parent tasks to maintain hierarchy
+                tasksWithResource.forEach(function(task) {
+                    var currentTask = task;
+                    while (currentTask.parent) {
+                        includedTaskIDs.add(currentTask.parent.ID);
+                        currentTask = currentTask.parent;
+                    }
+                });
+
+                filteredTasks = tasks.filter(function(task) {
+                    return includedTaskIDs.has(task.ID);
+                });
             }
 
-            // Filter tasks by resource
-            var tasksWithResource = tasks.filter(function(task) {
-                return task.ResourceNames && task.ResourceNames.trim() === resourceFilter;
-            });
+            buildTaskHierarchy();
+            updateTaskVisibility();
+        }
 
-            // Collect IDs of tasks with the selected resource
-            var taskIDsWithResource = tasksWithResource.map(function(task) {
-                return task.ID;
-            });
-
-            // Include predecessor tasks
-            var includedTaskIDs = new Set(taskIDsWithResource);
-            tasksWithResource.forEach(function(task) {
-                if (task.Predecessors) {
-                    var predecessors = task.Predecessors.split(',');
-                    predecessors.forEach(function(predecessorStr) {
-                        var match = predecessorStr.trim().match(/^(\d+)/);
-                        if (match) {
-                            var predecessorID = match[1];
-                            includedTaskIDs.add(predecessorID);
-                        }
+        // Update task visibility based on collapse/expand state
+        function updateTaskVisibility() {
+            function setVisibility(task) {
+                if (!task.visible) {
+                    hideChildren(task);
+                    return;
+                }
+                if (task.collapsed) {
+                    hideChildren(task);
+                } else {
+                    task.children.forEach(function(child) {
+                        child.visible = true;
+                        setVisibility(child);
                     });
                 }
-            });
+            }
 
-            // Collect all tasks that should be included
-            filteredTasks = tasks.filter(function(task) {
-                return includedTaskIDs.has(task.ID);
+            function hideChildren(task) {
+                task.children.forEach(function(child) {
+                    child.visible = false;
+                    hideChildren(child);
+                });
+            }
+
+            filteredTasks.forEach(function(task) {
+                if (!task.parent) {
+                    task.visible = true;
+                    setVisibility(task);
+                }
             });
         }
 
+        // Render the Gantt chart
         function renderGanttChart() {
             var ganttChartContainer = document.getElementById('ganttChartContainer');
-            ganttChartContainer.innerHTML = ''; // Clear previous chart
+            var scrollLeft = ganttChartContainer.scrollLeft;
+            var scrollTop = ganttChartContainer.scrollTop;
 
-            // Filter tasks based on selected resource
+            ganttChartContainer.innerHTML = '';
+
             filterTasks();
 
-            // Calculate date range
             var minDate = null;
             var maxDate = null;
 
-            filteredTasks.forEach(function(task) {
+            var visibleTasks = filteredTasks.filter(function(task) {
+                return task.visible;
+            });
+
+            visibleTasks.forEach(function(task) {
                 var startDate = new Date(task.Start);
                 var finishDate = new Date(task.Finish);
 
-                if (isNaN(startDate.getTime())) {
-                    console.error('Invalid start date for task:', task);
-                    return; // Skip this task
-                }
-                if (isNaN(finishDate.getTime())) {
-                    console.error('Invalid finish date for task:', task);
-                    return; // Skip this task
+                if (isNaN(startDate.getTime()) || isNaN(finishDate.getTime())) {
+                    return;
                 }
 
                 if (!minDate || startDate < minDate) {
@@ -331,12 +401,10 @@
             });
 
             if (!minDate || !maxDate) {
-                // No valid tasks to display
                 return;
             }
 
-            // Add buffer before and after the date range
-            var bufferDuration = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+            var bufferDuration = 7 * 24 * 60 * 60 * 1000;
             minDate = new Date(minDate.getTime() - bufferDuration);
             maxDate = new Date(maxDate.getTime() + bufferDuration);
 
@@ -344,15 +412,14 @@
             var chartWidth = (containerWidth - taskNameColumnWidth) * zoomLevel;
             var taskRowHeight = 30;
             var headerHeight = 30;
-            var totalHeight = filteredTasks.length * taskRowHeight + headerHeight;
 
-            // Create SVG element
+            var totalHeight = visibleTasks.length * taskRowHeight + headerHeight;
+
             var svgNS = 'http://www.w3.org/2000/svg';
             var svg = document.createElementNS(svgNS, 'svg');
             svg.setAttribute('height', totalHeight);
-            ganttChartContainer.appendChild(svg);
+            svg.setAttribute('width', taskNameColumnWidth + chartWidth);
 
-            // Define markers for dependency lines
             var defs = document.createElementNS(svgNS, 'defs');
             svg.appendChild(defs);
 
@@ -371,7 +438,6 @@
             marker.appendChild(markerPath);
             defs.appendChild(marker);
 
-            // Define clipPath for task names
             var clipPath = document.createElementNS(svgNS, 'clipPath');
             clipPath.setAttribute('id', 'taskNameClip');
             defs.appendChild(clipPath);
@@ -379,11 +445,10 @@
             var clipRect = document.createElementNS(svgNS, 'rect');
             clipRect.setAttribute('x', 0);
             clipRect.setAttribute('y', headerHeight);
-            clipRect.setAttribute('width', taskNameColumnWidth - 5); // Subtract some padding
+            clipRect.setAttribute('width', taskNameColumnWidth - 5);
             clipRect.setAttribute('height', totalHeight - headerHeight);
             clipPath.appendChild(clipRect);
 
-            // Draw header background
             var headerRect = document.createElementNS(svgNS, 'rect');
             headerRect.setAttribute('x', 0);
             headerRect.setAttribute('y', 0);
@@ -392,7 +457,6 @@
             headerRect.setAttribute('class', 'header');
             svg.appendChild(headerRect);
 
-            // Draw "Task Name" header
             var taskNameHeader = document.createElementNS(svgNS, 'text');
             taskNameHeader.setAttribute('x', 5);
             taskNameHeader.setAttribute('y', headerHeight / 2 + 5);
@@ -400,18 +464,16 @@
             taskNameHeader.textContent = 'Task Name';
             svg.appendChild(taskNameHeader);
 
-            // Draw x-axis labels and grid lines
             drawXAxis(svg, minDate, maxDate, chartWidth, headerHeight, totalHeight, taskNameColumnWidth);
 
-            // Map task IDs to their positions and data
             var taskMap = {};
-            var validTaskIndex = 0; // Index for tasks with valid dates
-            filteredTasks.forEach(function(task, index) {
+            var validTaskIndex = 0;
+
+            visibleTasks.forEach(function(task) {
                 var startDate = new Date(task.Start);
                 var finishDate = new Date(task.Finish);
 
                 if (isNaN(startDate.getTime()) || isNaN(finishDate.getTime())) {
-                    // Skip tasks with invalid dates
                     return;
                 }
 
@@ -420,16 +482,14 @@
 
                 var yPosition = headerHeight + validTaskIndex * taskRowHeight;
 
-                // Store task position data
                 taskMap[task.ID] = {
                     x: taskNameColumnWidth + taskStartOffset,
                     y: yPosition,
                     width: taskDuration,
-                    height: taskRowHeight - 10, // Vertical padding
+                    height: taskRowHeight - 10,
                     index: validTaskIndex
                 };
 
-                // Draw task name background (optional)
                 var taskNameBg = document.createElementNS(svgNS, 'rect');
                 taskNameBg.setAttribute('x', 0);
                 taskNameBg.setAttribute('y', yPosition);
@@ -439,46 +499,60 @@
                 taskNameBg.setAttribute('stroke', '#e0e0e0');
                 svg.appendChild(taskNameBg);
 
-                // Draw task name
+                var hasChildren = task.children && task.children.length > 0;
+                if (hasChildren) {
+                    var indicator = document.createElementNS(svgNS, 'text');
+                    indicator.setAttribute('x', 5 + ((parseInt(task.OutlineLevel) - 1) * 15));
+                    indicator.setAttribute('y', yPosition + taskRowHeight / 2 + 4);
+                    indicator.setAttribute('class', 'collapsed-indicator');
+                    indicator.textContent = task.collapsed ? '+' : '-';
+                    indicator.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        task.collapsed = !task.collapsed;
+                        renderGanttChart();
+                    });
+                    svg.appendChild(indicator);
+                }
+
                 var taskNameText = document.createElementNS(svgNS, 'text');
-                taskNameText.setAttribute('x', 5);
-                taskNameText.setAttribute('y', yPosition + taskRowHeight / 2 + 4); // Vertically center text
+                taskNameText.setAttribute('x', 20 + ((parseInt(task.OutlineLevel) - 1) * 15));
+                taskNameText.setAttribute('y', yPosition + taskRowHeight / 2 + 4);
                 taskNameText.setAttribute('class', 'task-name');
                 taskNameText.setAttribute('clip-path', 'url(#taskNameClip)');
                 taskNameText.textContent = task.Name || 'No Name';
 
-                // Indent task names based on OutlineLevel
-                var outlineLevel = parseInt(task.OutlineLevel) || 1;
-                taskNameText.setAttribute('dx', (outlineLevel - 1) * 15);
+                taskNameText.addEventListener('click', function() {
+                    if (hasChildren) {
+                        task.collapsed = !task.collapsed;
+                        renderGanttChart();
+                    }
+                });
 
-                // Add tooltip to task name (optional)
                 var title = document.createElementNS(svgNS, 'title');
                 title.textContent = task.Name || 'No Name';
                 taskNameText.appendChild(title);
 
                 svg.appendChild(taskNameText);
 
-                // Determine task bar color based on OutlineLevel
-                var taskColor = '#3498db'; // Default blue color
+                var outlineLevel = parseInt(task.OutlineLevel) || 1;
+                var taskColor = '#3498db';
                 if (outlineLevel === 1) {
-                    taskColor = '#7f8c8d'; // Grey for Outline Level 1
+                    taskColor = '#7f8c8d';
                 } else if (outlineLevel === 2) {
-                    taskColor = '#3498db'; // Current blue for Outline Level 2
+                    taskColor = '#3498db';
                 } else if (outlineLevel >= 3) {
-                    taskColor = '#85c1e9'; // Lighter blue for Outline Level 3 and above
+                    taskColor = '#85c1e9';
                 }
 
-                // Draw task bar
                 var rect = document.createElementNS(svgNS, 'rect');
-                rect.setAttribute('x', taskNameColumnWidth + taskStartOffset); // Offset by task name column width
-                rect.setAttribute('y', yPosition + 5); // Slight vertical padding
+                rect.setAttribute('x', taskNameColumnWidth + taskStartOffset);
+                rect.setAttribute('y', yPosition + 5);
                 rect.setAttribute('width', taskDuration);
-                rect.setAttribute('height', taskRowHeight - 10); // Vertical padding
+                rect.setAttribute('height', taskRowHeight - 10);
                 rect.setAttribute('fill', taskColor);
                 rect.setAttribute('class', 'task-bar');
-                rect.setAttribute('data-index', index);
+                rect.setAttribute('data-index', task.index);
 
-                // Add event listeners for tooltip
                 rect.addEventListener('mouseover', function(e) {
                     showTooltip(e, task);
                 });
@@ -491,17 +565,16 @@
 
                 svg.appendChild(rect);
 
-                validTaskIndex++; // Increment only for valid tasks
+                validTaskIndex++;
             });
 
-            // Draw dependency lines
             drawDependencies(svg, filteredTasks, taskMap, taskNameColumnWidth);
 
-            // Adjust SVG width to accommodate content
-            var requiredWidth = taskNameColumnWidth + chartWidth; // Total width
-            svg.setAttribute('width', requiredWidth);
+            ganttChartContainer.appendChild(svg);
 
-            // Set up zoom controls
+            ganttChartContainer.scrollLeft = scrollLeft;
+            ganttChartContainer.scrollTop = scrollTop;
+
             document.getElementById('zoomInButton').onclick = function() {
                 zoomLevel *= 1.5;
                 renderGanttChart();
@@ -511,40 +584,31 @@
                 zoomLevel /= 1.5;
                 renderGanttChart();
             };
-
-            // Draw separator line and make it draggable
-            drawSeparatorLine(svg, headerHeight, totalHeight);
         }
 
+        // Draw X-axis and grid lines
         function drawXAxis(svg, minDate, maxDate, chartWidth, headerHeight, totalHeight, taskNameColumnWidth) {
             var svgNS = 'http://www.w3.org/2000/svg';
-
-            // Determine time scale based on zoom level
             var timeSpan = maxDate - minDate;
             var pixelsPerDay = chartWidth / (timeSpan / (1000 * 3600 * 24));
 
-            var labelInterval; // in milliseconds
+            var labelInterval;
             var dateFormatOptions;
 
             if (pixelsPerDay * zoomLevel > 80) {
-                // Show days
-                labelInterval = 1000 * 3600 * 24; // One day
+                labelInterval = 1000 * 3600 * 24;
                 dateFormatOptions = { day: 'numeric', month: 'short' };
             } else if (pixelsPerDay * zoomLevel > 20) {
-                // Show weeks
-                labelInterval = 1000 * 3600 * 24 * 7; // One week
+                labelInterval = 1000 * 3600 * 24 * 7;
                 dateFormatOptions = { day: 'numeric', month: 'short' };
             } else {
-                // Show months
-                labelInterval = 1000 * 3600 * 24 * 30; // Approximate one month
+                labelInterval = 1000 * 3600 * 24 * 30;
                 dateFormatOptions = { month: 'short', year: 'numeric' };
             }
 
-            // Draw labels and grid lines
             for (var time = minDate.getTime(); time <= maxDate.getTime(); time += labelInterval) {
                 var xPos = taskNameColumnWidth + ((time - minDate.getTime()) / (maxDate - minDate)) * chartWidth;
 
-                // Grid line
                 var line = document.createElementNS(svgNS, 'line');
                 line.setAttribute('x1', xPos);
                 line.setAttribute('y1', headerHeight);
@@ -553,8 +617,7 @@
                 line.setAttribute('class', 'axis-line');
                 svg.appendChild(line);
 
-                // Label
-                if (xPos > taskNameColumnWidth + 30) { // Ensure labels don't overlap with Task Name column
+                if (xPos > taskNameColumnWidth + 30) {
                     var label = document.createElementNS(svgNS, 'text');
                     label.setAttribute('x', xPos);
                     label.setAttribute('y', headerHeight / 2 + 5);
@@ -564,8 +627,6 @@
                 }
             }
 
-            // Draw vertical line separating task names and chart
-            // This line will be draggable
             var separatorLine = document.createElementNS(svgNS, 'line');
             separatorLine.setAttribute('x1', taskNameColumnWidth);
             separatorLine.setAttribute('y1', 0);
@@ -577,19 +638,19 @@
             separatorLine.style.cursor = 'col-resize';
             svg.appendChild(separatorLine);
 
-            // Event listeners for resizing
             separatorLine.addEventListener('mousedown', startResizing);
             svg.addEventListener('mousemove', resizing);
             svg.addEventListener('mouseup', stopResizing);
             svg.addEventListener('mouseleave', stopResizing);
         }
 
-        function drawDependencies(svg, tasks, taskMap, taskNameColumnWidth) {
+        // Draw dependency lines
+        function drawDependencies(svg, tasksList, taskMap, taskNameColumnWidth) {
             var svgNS = 'http://www.w3.org/2000/svg';
 
-            tasks.forEach(function(task) {
-                if (!task.Predecessors || !taskMap[task.ID]) {
-                    return; // Skip if no predecessors or task not mapped
+            tasksList.forEach(function(task) {
+                if (!task.Predecessors || !taskMap[task.ID] || !task.visible) {
+                    return;
                 }
 
                 var predecessors = task.Predecessors.split(',');
@@ -599,53 +660,46 @@
                     if (!match) return;
 
                     var predecessorID = match[1];
-                    var dependencyType = match[2] || 'FS'; // Default to Finish-to-Start
+                    var dependencyType = match[2] || 'FS';
 
                     var predecessorTask = taskMap[predecessorID];
                     var successorTask = taskMap[task.ID];
 
                     if (!predecessorTask || !successorTask) return;
 
-                    // Calculate positions based on dependency type
-                    var startX, startY, endX, endY;
+                    var predecessorTaskObj = tasks.find(function(t) { return t.ID === predecessorID; });
+                    if (!predecessorTaskObj || !predecessorTaskObj.visible) return;
 
-                    // Adjust positions for arrow drawing
-                    var gap = 5; // Gap between task bars and dependency lines
+                    var startX, startY, endX, endY;
+                    var gap = 5;
 
                     if (dependencyType.toUpperCase() === 'FS') {
-                        // Finish-to-Start
                         startX = predecessorTask.x + predecessorTask.width;
                         startY = predecessorTask.y + predecessorTask.height / 2 + 5;
                         endX = successorTask.x;
                         endY = successorTask.y + successorTask.height / 2 + 5;
                     } else if (dependencyType.toUpperCase() === 'SS') {
-                        // Start-to-Start
                         startX = predecessorTask.x;
                         startY = predecessorTask.y + predecessorTask.height / 2 + 5;
                         endX = successorTask.x;
                         endY = successorTask.y + successorTask.height / 2 + 5;
                     } else if (dependencyType.toUpperCase() === 'FF') {
-                        // Finish-to-Finish
                         startX = predecessorTask.x + predecessorTask.width;
                         startY = predecessorTask.y + predecessorTask.height / 2 + 5;
                         endX = successorTask.x + successorTask.width;
                         endY = successorTask.y + successorTask.height / 2 + 5;
                     } else if (dependencyType.toUpperCase() === 'SF') {
-                        // Start-to-Finish
                         startX = predecessorTask.x;
                         startY = predecessorTask.y + predecessorTask.height / 2 + 5;
                         endX = successorTask.x + successorTask.width;
                         endY = successorTask.y + successorTask.height / 2 + 5;
                     } else {
-                        // Unknown dependency type
                         return;
                     }
 
-                    // Draw the dependency line
                     var path = document.createElementNS(svgNS, 'path');
                     path.setAttribute('class', 'dependency-line');
 
-                    // Create a path that goes from the start point to the end point with right angles
                     var d = [
                         'M', startX, startY,
                         'L', startX + gap, startY,
@@ -661,11 +715,7 @@
             });
         }
 
-        function drawSeparatorLine(svg, headerHeight, totalHeight) {
-            // The separator line is already drawn in drawXAxis and event listeners are attached there
-            // This function is kept for compatibility
-        }
-
+        // Resizing functions
         function startResizing(e) {
             isResizing = true;
             startX = e.clientX;
@@ -677,8 +727,8 @@
             var dx = e.clientX - startX;
             startX = e.clientX;
             taskNameColumnWidth += dx;
-            if (taskNameColumnWidth < 100) taskNameColumnWidth = 100; // Minimum width
-            if (taskNameColumnWidth > 500) taskNameColumnWidth = 500; // Maximum width
+            if (taskNameColumnWidth < 100) taskNameColumnWidth = 100;
+            if (taskNameColumnWidth > 500) taskNameColumnWidth = 500;
             renderGanttChart();
         }
 
@@ -693,7 +743,6 @@
             var resource = task.ResourceNames || 'No Resource';
             var notes = task.Notes || '';
 
-            // Strip HTML tags from notes
             notes = stripHTMLTags(notes);
 
             var content = '';
@@ -712,7 +761,7 @@
         function moveTooltip(e) {
             var ganttChartContainer = document.getElementById('ganttChartContainer');
             var rect = ganttChartContainer.getBoundingClientRect();
-            var x = e.clientX - rect.left + ganttChartContainer.scrollLeft + 10; // Offset to prevent cursor overlap
+            var x = e.clientX - rect.left + ganttChartContainer.scrollLeft + 10;
             var y = e.clientY - rect.top + ganttChartContainer.scrollTop + 10;
             tooltip.style.left = x + 'px';
             tooltip.style.top = y + 'px';
@@ -723,14 +772,10 @@
         }
 
         function stripHTMLTags(html) {
-            // Replace <br> and <br/> with newline
             html = html.replace(/<br\s*\/?>/gi, '\n');
-
-            // Remove all other HTML tags
             var tmp = document.createElement('div');
             tmp.innerHTML = html;
             var text = tmp.textContent || tmp.innerText || '';
-
             return text.trim();
         }
 
@@ -741,17 +786,14 @@
 
         function exportCSV() {
             var csvContent = '';
-            var delimiter = ','; // Use comma as delimiter
+            var delimiter = ',';
 
-            // Add headers
             csvContent += originalHeaders.join(delimiter) + '\n';
 
-            // Add task data
             tasks.forEach(function(task) {
                 var row = [];
                 originalHeaders.forEach(function(header) {
                     var value = task[header.trim().replace(/\s+/g, '')] || '';
-                    // Escape quotes and wrap value in quotes if it contains the delimiter or newline
                     if (value.indexOf(delimiter) >= 0 || value.indexOf('\n') >= 0 || value.indexOf('"') >= 0) {
                         value = '"' + value.replace(/"/g, '""') + '"';
                     }
@@ -760,7 +802,6 @@
                 csvContent += row.join(delimiter) + '\n';
             });
 
-            // Create a Blob and trigger download
             var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             var url = URL.createObjectURL(blob);
             var link = document.createElement('a');
@@ -771,6 +812,25 @@
             link.click();
             document.body.removeChild(link);
         }
+
+        // Collapse All and Expand All buttons
+        document.getElementById('collapseAllButton').onclick = function() {
+            tasks.forEach(function(task) {
+                if (task.children && task.children.length > 0) {
+                    task.collapsed = true;
+                }
+            });
+            renderGanttChart();
+        };
+
+        document.getElementById('expandAllButton').onclick = function() {
+            tasks.forEach(function(task) {
+                if (task.children && task.children.length > 0) {
+                    task.collapsed = false;
+                }
+            });
+            renderGanttChart();
+        };
     </script>
 </body>
 </html>
