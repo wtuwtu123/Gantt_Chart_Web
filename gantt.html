@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Gantt Chart Tool with Collapse/Expand Feature</title>
+    <title>Gantt Chart Tool</title>
     <style>
         /* Basic styles and box model adjustments */
         *, *::before, *::after {
@@ -22,9 +22,31 @@
             margin-right: 5px;
         }
 
-        #ganttChartContainer {
-            width: 100%;
+        #container {
+            display: flex;
             height: calc(100vh - 130px);
+            overflow: hidden;
+        }
+
+        #taskNamesContainer {
+            width: 200px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            border-right: 1px solid #ccc;
+            position: relative;
+            background-color: #fff;
+            flex-shrink: 0; /* Prevent shrinking when resizing */
+        }
+
+        #separator {
+            width: 5px;
+            cursor: col-resize;
+            background-color: #ccc;
+            flex-shrink: 0; /* Prevent shrinking */
+        }
+
+        #ganttChartContainer {
+            flex-grow: 1;
             overflow: auto;
             position: relative;
         }
@@ -89,9 +111,22 @@
             scrollbar-color: #ccc transparent;
         }
 
-        /* Draggable separator cursor style */
-        .separator-line {
-            cursor: col-resize;
+        /* Tooltip styling */
+        #tooltip {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            background-color: rgba(50, 50, 50, 0.9);
+            color: #fff;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            max-width: 400px;
+            display: none;
+            z-index: 1000;
+            white-space: pre-wrap;
         }
 
         /* Dependency lines style */
@@ -99,27 +134,12 @@
             stroke: #555;
             stroke-width: 1.5;
             fill: none;
-            marker-end: url(#arrowhead);
-        }
-
-        /* Tooltip styling */
-        #tooltip {
-            position: absolute;
-            pointer-events: none;
-            background-color: rgba(50, 50, 50, 0.9);
-            color: #fff;
-            padding: 5px;
-            border-radius: 4px;
-            font-size: 12px;
-            max-width: 300px;
-            display: none;
-            z-index: 1000;
-            white-space: pre-wrap;
+            /* Removed marker-end from here */
         }
     </style>
 </head>
 <body>
-    <h1>Gantt Chart Tool with Collapse/Expand Feature</h1>
+    <h1>Gantt Chart Tool</h1>
     <div id="controls">
         <input type="file" id="csvFileInput" accept=".csv" />
         <button id="zoomInButton">Zoom In</button>
@@ -131,14 +151,37 @@
         </select>
         <button id="exportButton">Export</button>
     </div>
-    <div id="ganttChartContainer">
-        <!-- Gantt chart will be rendered here -->
+    <div id="container">
+        <div id="taskNamesContainer">
+            <!-- Task names will be rendered here -->
+        </div>
+        <div id="separator"></div>
+        <div id="ganttChartContainer">
+            <!-- Gantt chart will be rendered here -->
+        </div>
     </div>
 
     <!-- Tooltip for displaying Resource Names and Notes -->
     <div id="tooltip"></div>
 
     <script>
+        // Global variables
+        var tasks = [];
+        var zoomLevel = 1;
+        var taskNameColumnWidth = 200;
+        var isResizing = false;
+        var lastDownX = 0;
+        var filteredTasks = [];
+        var allResources = [];
+        var resourceFilter = 'All';
+        var originalHeaders = [];
+
+        // Get references to DOM elements
+        var container = document.getElementById('container');
+        var taskNamesContainer = document.getElementById('taskNamesContainer');
+        var ganttChartContainer = document.getElementById('ganttChartContainer');
+        var separator = document.getElementById('separator');
+
         // File input handling
         document.getElementById('csvFileInput').addEventListener('change', function(e) {
             var file = e.target.files[0];
@@ -153,16 +196,34 @@
             reader.readAsText(file);
         });
 
-        // Global variables
-        var tasks = [];
-        var zoomLevel = 1;
-        var taskNameColumnWidth = 200;
-        var isResizing = false;
-        var startX = 0;
-        var filteredTasks = [];
-        var allResources = [];
-        var resourceFilter = 'All';
-        var originalHeaders = [];
+        // Resizing functionality
+        separator.addEventListener('mousedown', function(e) {
+            isResizing = true;
+            lastDownX = e.clientX;
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (!isResizing) return;
+
+            var deltaX = e.clientX - lastDownX;
+            lastDownX = e.clientX;
+
+            var newTaskNameWidth = taskNameColumnWidth + deltaX;
+
+            if (newTaskNameWidth < 100) newTaskNameWidth = 100; // Minimum width
+            if (newTaskNameWidth > 500) newTaskNameWidth = 500; // Maximum width
+
+            taskNameColumnWidth = newTaskNameWidth;
+
+            taskNamesContainer.style.width = taskNameColumnWidth + 'px';
+
+            renderGanttChart();
+        });
+
+        document.addEventListener('mouseup', function(e) {
+            isResizing = false;
+        });
 
         // CSV parsing functions
         function parseCSV(contents) {
@@ -369,11 +430,12 @@
 
         // Render the Gantt chart
         function renderGanttChart() {
-            var ganttChartContainer = document.getElementById('ganttChartContainer');
             var scrollLeft = ganttChartContainer.scrollLeft;
             var scrollTop = ganttChartContainer.scrollTop;
+            var taskNamesScrollTop = taskNamesContainer.scrollTop;
 
             ganttChartContainer.innerHTML = '';
+            taskNamesContainer.innerHTML = '';
 
             filterTasks();
 
@@ -408,17 +470,40 @@
             minDate = new Date(minDate.getTime() - bufferDuration);
             maxDate = new Date(maxDate.getTime() + bufferDuration);
 
-            var containerWidth = ganttChartContainer.offsetWidth;
-            var chartWidth = (containerWidth - taskNameColumnWidth) * zoomLevel;
+            var chartWidth = ganttChartContainer.offsetWidth * zoomLevel;
             var taskRowHeight = 30;
             var headerHeight = 30;
 
             var totalHeight = visibleTasks.length * taskRowHeight + headerHeight;
 
             var svgNS = 'http://www.w3.org/2000/svg';
+
+            // Render task names
+            var taskNamesSVG = document.createElementNS(svgNS, 'svg');
+            taskNamesSVG.setAttribute('height', totalHeight);
+            taskNamesSVG.setAttribute('width', taskNameColumnWidth);
+            taskNamesContainer.appendChild(taskNamesSVG);
+
+            var taskNameHeaderRect = document.createElementNS(svgNS, 'rect');
+            taskNameHeaderRect.setAttribute('x', 0);
+            taskNameHeaderRect.setAttribute('y', 0);
+            taskNameHeaderRect.setAttribute('width', taskNameColumnWidth);
+            taskNameHeaderRect.setAttribute('height', headerHeight);
+            taskNameHeaderRect.setAttribute('class', 'header');
+            taskNamesSVG.appendChild(taskNameHeaderRect);
+
+            var taskNameHeaderText = document.createElementNS(svgNS, 'text');
+            taskNameHeaderText.setAttribute('x', 5);
+            taskNameHeaderText.setAttribute('y', headerHeight / 2 + 5);
+            taskNameHeaderText.setAttribute('class', 'header-text');
+            taskNameHeaderText.textContent = 'Task Name';
+            taskNamesSVG.appendChild(taskNameHeaderText);
+
+            // Render chart
             var svg = document.createElementNS(svgNS, 'svg');
             svg.setAttribute('height', totalHeight);
-            svg.setAttribute('width', taskNameColumnWidth + chartWidth);
+            svg.setAttribute('width', chartWidth);
+            ganttChartContainer.appendChild(svg);
 
             var defs = document.createElementNS(svgNS, 'defs');
             svg.appendChild(defs);
@@ -438,33 +523,7 @@
             marker.appendChild(markerPath);
             defs.appendChild(marker);
 
-            var clipPath = document.createElementNS(svgNS, 'clipPath');
-            clipPath.setAttribute('id', 'taskNameClip');
-            defs.appendChild(clipPath);
-
-            var clipRect = document.createElementNS(svgNS, 'rect');
-            clipRect.setAttribute('x', 0);
-            clipRect.setAttribute('y', headerHeight);
-            clipRect.setAttribute('width', taskNameColumnWidth - 5);
-            clipRect.setAttribute('height', totalHeight - headerHeight);
-            clipPath.appendChild(clipRect);
-
-            var headerRect = document.createElementNS(svgNS, 'rect');
-            headerRect.setAttribute('x', 0);
-            headerRect.setAttribute('y', 0);
-            headerRect.setAttribute('width', taskNameColumnWidth + chartWidth);
-            headerRect.setAttribute('height', headerHeight);
-            headerRect.setAttribute('class', 'header');
-            svg.appendChild(headerRect);
-
-            var taskNameHeader = document.createElementNS(svgNS, 'text');
-            taskNameHeader.setAttribute('x', 5);
-            taskNameHeader.setAttribute('y', headerHeight / 2 + 5);
-            taskNameHeader.setAttribute('class', 'header-text');
-            taskNameHeader.textContent = 'Task Name';
-            svg.appendChild(taskNameHeader);
-
-            drawXAxis(svg, minDate, maxDate, chartWidth, headerHeight, totalHeight, taskNameColumnWidth);
+            drawXAxis(svg, minDate, maxDate, chartWidth, headerHeight, totalHeight);
 
             var taskMap = {};
             var validTaskIndex = 0;
@@ -483,13 +542,14 @@
                 var yPosition = headerHeight + validTaskIndex * taskRowHeight;
 
                 taskMap[task.ID] = {
-                    x: taskNameColumnWidth + taskStartOffset,
+                    x: taskStartOffset,
                     y: yPosition,
                     width: taskDuration,
                     height: taskRowHeight - 10,
                     index: validTaskIndex
                 };
 
+                // Task name background
                 var taskNameBg = document.createElementNS(svgNS, 'rect');
                 taskNameBg.setAttribute('x', 0);
                 taskNameBg.setAttribute('y', yPosition);
@@ -497,8 +557,9 @@
                 taskNameBg.setAttribute('height', taskRowHeight);
                 taskNameBg.setAttribute('fill', '#fff');
                 taskNameBg.setAttribute('stroke', '#e0e0e0');
-                svg.appendChild(taskNameBg);
+                taskNamesSVG.appendChild(taskNameBg);
 
+                // Collapse/expand indicator
                 var hasChildren = task.children && task.children.length > 0;
                 if (hasChildren) {
                     var indicator = document.createElementNS(svgNS, 'text');
@@ -511,14 +572,14 @@
                         task.collapsed = !task.collapsed;
                         renderGanttChart();
                     });
-                    svg.appendChild(indicator);
+                    taskNamesSVG.appendChild(indicator);
                 }
 
+                // Task name text
                 var taskNameText = document.createElementNS(svgNS, 'text');
                 taskNameText.setAttribute('x', 20 + ((parseInt(task.OutlineLevel) - 1) * 15));
                 taskNameText.setAttribute('y', yPosition + taskRowHeight / 2 + 4);
                 taskNameText.setAttribute('class', 'task-name');
-                taskNameText.setAttribute('clip-path', 'url(#taskNameClip)');
                 taskNameText.textContent = task.Name || 'No Name';
 
                 taskNameText.addEventListener('click', function() {
@@ -532,7 +593,7 @@
                 title.textContent = task.Name || 'No Name';
                 taskNameText.appendChild(title);
 
-                svg.appendChild(taskNameText);
+                taskNamesSVG.appendChild(taskNameText);
 
                 var outlineLevel = parseInt(task.OutlineLevel) || 1;
                 var taskColor = '#3498db';
@@ -544,8 +605,9 @@
                     taskColor = '#85c1e9';
                 }
 
+                // Task bar
                 var rect = document.createElementNS(svgNS, 'rect');
-                rect.setAttribute('x', taskNameColumnWidth + taskStartOffset);
+                rect.setAttribute('x', taskStartOffset);
                 rect.setAttribute('y', yPosition + 5);
                 rect.setAttribute('width', taskDuration);
                 rect.setAttribute('height', taskRowHeight - 10);
@@ -556,9 +618,6 @@
                 rect.addEventListener('mouseover', function(e) {
                     showTooltip(e, task);
                 });
-                rect.addEventListener('mousemove', function(e) {
-                    moveTooltip(e);
-                });
                 rect.addEventListener('mouseout', function(e) {
                     hideTooltip();
                 });
@@ -568,12 +627,19 @@
                 validTaskIndex++;
             });
 
-            drawDependencies(svg, filteredTasks, taskMap, taskNameColumnWidth);
-
-            ganttChartContainer.appendChild(svg);
+            drawDependencies(svg, filteredTasks, taskMap);
 
             ganttChartContainer.scrollLeft = scrollLeft;
             ganttChartContainer.scrollTop = scrollTop;
+            taskNamesContainer.scrollTop = taskNamesScrollTop;
+
+            // Synchronize scrolling between task names and chart
+            taskNamesContainer.addEventListener('scroll', function() {
+                ganttChartContainer.scrollTop = taskNamesContainer.scrollTop;
+            });
+            ganttChartContainer.addEventListener('scroll', function() {
+                taskNamesContainer.scrollTop = ganttChartContainer.scrollTop;
+            });
 
             document.getElementById('zoomInButton').onclick = function() {
                 zoomLevel *= 1.5;
@@ -587,7 +653,7 @@
         }
 
         // Draw X-axis and grid lines
-        function drawXAxis(svg, minDate, maxDate, chartWidth, headerHeight, totalHeight, taskNameColumnWidth) {
+        function drawXAxis(svg, minDate, maxDate, chartWidth, headerHeight, totalHeight) {
             var svgNS = 'http://www.w3.org/2000/svg';
             var timeSpan = maxDate - minDate;
             var pixelsPerDay = chartWidth / (timeSpan / (1000 * 3600 * 24));
@@ -607,7 +673,7 @@
             }
 
             for (var time = minDate.getTime(); time <= maxDate.getTime(); time += labelInterval) {
-                var xPos = taskNameColumnWidth + ((time - minDate.getTime()) / (maxDate - minDate)) * chartWidth;
+                var xPos = ((time - minDate.getTime()) / (maxDate - minDate)) * chartWidth;
 
                 var line = document.createElementNS(svgNS, 'line');
                 line.setAttribute('x1', xPos);
@@ -617,7 +683,7 @@
                 line.setAttribute('class', 'axis-line');
                 svg.appendChild(line);
 
-                if (xPos > taskNameColumnWidth + 30) {
+                if (xPos > 30) {
                     var label = document.createElementNS(svgNS, 'text');
                     label.setAttribute('x', xPos);
                     label.setAttribute('y', headerHeight / 2 + 5);
@@ -626,26 +692,10 @@
                     svg.appendChild(label);
                 }
             }
-
-            var separatorLine = document.createElementNS(svgNS, 'line');
-            separatorLine.setAttribute('x1', taskNameColumnWidth);
-            separatorLine.setAttribute('y1', 0);
-            separatorLine.setAttribute('x2', taskNameColumnWidth);
-            separatorLine.setAttribute('y2', totalHeight);
-            separatorLine.setAttribute('stroke', '#ccc');
-            separatorLine.setAttribute('stroke-width', '3');
-            separatorLine.setAttribute('class', 'separator-line');
-            separatorLine.style.cursor = 'col-resize';
-            svg.appendChild(separatorLine);
-
-            separatorLine.addEventListener('mousedown', startResizing);
-            svg.addEventListener('mousemove', resizing);
-            svg.addEventListener('mouseup', stopResizing);
-            svg.addEventListener('mouseleave', stopResizing);
         }
 
         // Draw dependency lines
-        function drawDependencies(svg, tasksList, taskMap, taskNameColumnWidth) {
+        function drawDependencies(svg, tasksList, taskMap) {
             var svgNS = 'http://www.w3.org/2000/svg';
 
             tasksList.forEach(function(task) {
@@ -700,6 +750,9 @@
                     var path = document.createElementNS(svgNS, 'path');
                     path.setAttribute('class', 'dependency-line');
 
+                    // Set the marker-end attribute directly on the path
+                    path.setAttribute('marker-end', 'url(#arrowhead)');
+
                     var d = [
                         'M', startX, startY,
                         'L', startX + gap, startY,
@@ -715,33 +768,13 @@
             });
         }
 
-        // Resizing functions
-        function startResizing(e) {
-            isResizing = true;
-            startX = e.clientX;
-            e.preventDefault();
-        }
-
-        function resizing(e) {
-            if (!isResizing) return;
-            var dx = e.clientX - startX;
-            startX = e.clientX;
-            taskNameColumnWidth += dx;
-            if (taskNameColumnWidth < 100) taskNameColumnWidth = 100;
-            if (taskNameColumnWidth > 500) taskNameColumnWidth = 500;
-            renderGanttChart();
-        }
-
-        function stopResizing(e) {
-            isResizing = false;
-        }
-
         // Tooltip functions
         var tooltip = document.getElementById('tooltip');
 
         function showTooltip(e, task) {
             var resource = task.ResourceNames || 'No Resource';
             var notes = task.Notes || '';
+            var percentComplete = task['%Complete'] || '0';
 
             notes = stripHTMLTags(notes);
 
@@ -750,21 +783,12 @@
                 content += '<strong>Resource:</strong> ' + resource + '<br>';
             }
             if (notes) {
-                content += '<strong>Notes:</strong><br>' + notes;
+                content += '<strong>Notes:</strong><br>' + notes + '<br>';
             }
+            content += '<strong>Progress:</strong> ' + percentComplete + '%';
 
             tooltip.innerHTML = content;
             tooltip.style.display = 'block';
-            moveTooltip(e);
-        }
-
-        function moveTooltip(e) {
-            var ganttChartContainer = document.getElementById('ganttChartContainer');
-            var rect = ganttChartContainer.getBoundingClientRect();
-            var x = e.clientX - rect.left + ganttChartContainer.scrollLeft + 10;
-            var y = e.clientY - rect.top + ganttChartContainer.scrollTop + 10;
-            tooltip.style.left = x + 'px';
-            tooltip.style.top = y + 'px';
         }
 
         function hideTooltip() {
