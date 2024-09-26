@@ -134,7 +134,6 @@
             stroke: #555;
             stroke-width: 1.5;
             fill: none;
-            /* Removed marker-end from here */
         }
     </style>
 </head>
@@ -265,9 +264,13 @@
                     task[header] = value;
                 }
 
+                // Ensure IDs are strings
+                task.ID = task.ID.toString();
+
                 tasks.push(task);
             }
 
+            buildTaskHierarchy();
             populateResourceFilter();
             renderGanttChart();
         }
@@ -320,30 +323,44 @@
             });
         }
 
-        // Build task hierarchy
+        // Modified buildTaskHierarchy function
         function buildTaskHierarchy() {
-            filteredTasks.forEach(function(task) {
+            tasks.forEach(function(task) {
                 task.children = [];
-                task.collapsed = task.collapsed || false;
+                task.collapsed = false; // By default, tasks are expanded
+                task.parent = null; // Reset parent
+
+                // Ensure IDs are strings
+                task.ID = task.ID.toString();
+
+                // Parse OutlineLevel as integer
+                task.OutlineLevel = parseInt(task.OutlineLevel) || 1;
             });
 
-            for (var i = 0; i < filteredTasks.length; i++) {
-                var task = filteredTasks[i];
-                var outlineLevel = parseInt(task.OutlineLevel) || 1;
-                if (outlineLevel > 1) {
-                    for (var j = i - 1; j >= 0; j--) {
-                        var potentialParent = filteredTasks[j];
-                        var parentOutlineLevel = parseInt(potentialParent.OutlineLevel) || 1;
-                        if (parentOutlineLevel < outlineLevel) {
-                            potentialParent.children.push(task);
-                            task.parent = potentialParent;
-                            break;
-                        }
-                    }
-                } else {
+            var lastTasksAtLevel = {}; // Keep track of the last task at each level
+
+            tasks.forEach(function(task) {
+                var outlineLevel = task.OutlineLevel;
+
+                // If the task is at level 1, it has no parent
+                if (outlineLevel === 1) {
                     task.parent = null;
+                } else {
+                    // For levels greater than 1, the parent is the last task at level outlineLevel - 1
+                    var parentLevel = outlineLevel - 1;
+                    var parentTask = lastTasksAtLevel[parentLevel];
+                    if (parentTask) {
+                        task.parent = parentTask;
+                        parentTask.children.push(task);
+                    } else {
+                        // If no parent found, set parent to null
+                        task.parent = null;
+                    }
                 }
-            }
+
+                // Update the last task at this level
+                lastTasksAtLevel[outlineLevel] = task;
+            });
         }
 
         // Filter tasks based on resource
@@ -352,63 +369,47 @@
                 task.visible = false;
             });
 
+            var includedTaskIDs = new Set();
+
             if (resourceFilter === 'All') {
-                filteredTasks = tasks.slice();
+                includedTaskIDs = new Set(tasks.map(task => task.ID));
             } else {
                 var tasksWithResource = tasks.filter(function(task) {
                     return task.ResourceNames && task.ResourceNames.trim() === resourceFilter;
                 });
 
-                var taskIDsWithResource = tasksWithResource.map(function(task) {
-                    return task.ID;
-                });
-
-                var includedTaskIDs = new Set(taskIDsWithResource);
-
                 tasksWithResource.forEach(function(task) {
-                    if (task.Predecessors) {
-                        var predecessors = task.Predecessors.split(',');
-                        predecessors.forEach(function(predecessorStr) {
-                            var match = predecessorStr.trim().match(/^(\d+)/);
-                            if (match) {
-                                var predecessorID = match[1];
-                                includedTaskIDs.add(predecessorID);
-                            }
-                        });
-                    }
-                });
-
-                // Include parent tasks to maintain hierarchy
-                tasksWithResource.forEach(function(task) {
-                    var currentTask = task;
-                    while (currentTask.parent) {
-                        includedTaskIDs.add(currentTask.parent.ID);
-                        currentTask = currentTask.parent;
-                    }
-                });
-
-                filteredTasks = tasks.filter(function(task) {
-                    return includedTaskIDs.has(task.ID);
+                    includeTaskAndAncestors(task, includedTaskIDs);
                 });
             }
 
-            buildTaskHierarchy();
-            updateTaskVisibility();
+            // Build filteredTasks by including tasks in the original order
+            filteredTasks = tasks.filter(function(task) {
+                return includedTaskIDs.has(task.ID);
+            });
         }
 
-        // Update task visibility based on collapse/expand state
-        function updateTaskVisibility() {
-            function setVisibility(task) {
-                if (!task.visible) {
-                    hideChildren(task);
-                    return;
+        function includeTaskAndAncestors(task, includedTaskIDs) {
+            if (!includedTaskIDs.has(task.ID)) {
+                includedTaskIDs.add(task.ID);
+
+                // Include parent tasks to maintain hierarchy
+                if (task.parent) {
+                    includeTaskAndAncestors(task.parent, includedTaskIDs);
                 }
-                if (task.collapsed) {
+            }
+        }
+
+        // Update task visibility based on collapsed state
+        function updateTaskVisibility() {
+            function setVisibility(task, parentVisible) {
+                task.visible = parentVisible;
+
+                if (task.collapsed || !task.visible) {
                     hideChildren(task);
                 } else {
                     task.children.forEach(function(child) {
-                        child.visible = true;
-                        setVisibility(child);
+                        setVisibility(child, true);
                     });
                 }
             }
@@ -422,8 +423,7 @@
 
             filteredTasks.forEach(function(task) {
                 if (!task.parent) {
-                    task.visible = true;
-                    setVisibility(task);
+                    setVisibility(task, true);
                 }
             });
         }
@@ -438,6 +438,7 @@
             taskNamesContainer.innerHTML = '';
 
             filterTasks();
+            updateTaskVisibility();
 
             var minDate = null;
             var maxDate = null;
@@ -541,7 +542,10 @@
 
                 var yPosition = headerHeight + validTaskIndex * taskRowHeight;
 
-                taskMap[task.ID] = {
+                // Ensure IDs are strings
+                var taskID = task.ID.toString();
+
+                taskMap[taskID] = {
                     x: taskStartOffset,
                     y: yPosition,
                     width: taskDuration,
@@ -563,7 +567,7 @@
                 var hasChildren = task.children && task.children.length > 0;
                 if (hasChildren) {
                     var indicator = document.createElementNS(svgNS, 'text');
-                    indicator.setAttribute('x', 5 + ((parseInt(task.OutlineLevel) - 1) * 15));
+                    indicator.setAttribute('x', 5 + ((task.OutlineLevel - 1) * 15));
                     indicator.setAttribute('y', yPosition + taskRowHeight / 2 + 4);
                     indicator.setAttribute('class', 'collapsed-indicator');
                     indicator.textContent = task.collapsed ? '+' : '-';
@@ -577,7 +581,10 @@
 
                 // Task name text
                 var taskNameText = document.createElementNS(svgNS, 'text');
-                taskNameText.setAttribute('x', 20 + ((parseInt(task.OutlineLevel) - 1) * 15));
+                var textX = hasChildren
+                    ? 20 + ((task.OutlineLevel - 1) * 15)
+                    : 5 + ((task.OutlineLevel - 1) * 15);
+                taskNameText.setAttribute('x', textX);
                 taskNameText.setAttribute('y', yPosition + taskRowHeight / 2 + 4);
                 taskNameText.setAttribute('class', 'task-name');
                 taskNameText.textContent = task.Name || 'No Name';
@@ -595,7 +602,7 @@
 
                 taskNamesSVG.appendChild(taskNameText);
 
-                var outlineLevel = parseInt(task.OutlineLevel) || 1;
+                var outlineLevel = task.OutlineLevel || 1;
                 var taskColor = '#3498db';
                 if (outlineLevel === 1) {
                     taskColor = '#7f8c8d';
@@ -699,25 +706,25 @@
             var svgNS = 'http://www.w3.org/2000/svg';
 
             tasksList.forEach(function(task) {
-                if (!task.Predecessors || !taskMap[task.ID] || !task.visible) {
+                if (!task.Predecessors || !taskMap[task.ID.toString()] || !task.visible) {
                     return;
                 }
 
                 var predecessors = task.Predecessors.split(',');
 
                 predecessors.forEach(function(predecessorStr) {
-                    var match = predecessorStr.trim().match(/^(\d+)(FS|SS|FF|SF)?$/i);
+                    var match = predecessorStr.trim().match(/^(\d+)(FS|SS|FF|SF)?/i);
                     if (!match) return;
 
-                    var predecessorID = match[1];
+                    var predecessorID = match[1].toString();
                     var dependencyType = match[2] || 'FS';
 
                     var predecessorTask = taskMap[predecessorID];
-                    var successorTask = taskMap[task.ID];
+                    var successorTask = taskMap[task.ID.toString()];
 
                     if (!predecessorTask || !successorTask) return;
 
-                    var predecessorTaskObj = tasks.find(function(t) { return t.ID === predecessorID; });
+                    var predecessorTaskObj = tasks.find(function(t) { return t.ID.toString() === predecessorID; });
                     if (!predecessorTaskObj || !predecessorTaskObj.visible) return;
 
                     var startX, startY, endX, endY;
