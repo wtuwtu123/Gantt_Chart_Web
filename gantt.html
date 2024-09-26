@@ -529,6 +529,8 @@
             var taskMap = {};
             var validTaskIndex = 0;
 
+            var currentDate = new Date(); // Get the current date
+
             visibleTasks.forEach(function(task) {
                 var startDate = new Date(task.Start);
                 var finishDate = new Date(task.Finish);
@@ -602,14 +604,26 @@
 
                 taskNamesSVG.appendChild(taskNameText);
 
-                var outlineLevel = task.OutlineLevel || 1;
-                var taskColor = '#3498db';
-                if (outlineLevel === 1) {
-                    taskColor = '#7f8c8d';
-                } else if (outlineLevel === 2) {
-                    taskColor = '#3498db';
-                } else if (outlineLevel >= 3) {
-                    taskColor = '#85c1e9';
+                // Determine task color based on completion and overdue status
+                var percentComplete = parseFloat(task['%Complete']) || 0;
+                var taskColor;
+
+                if (percentComplete === 100) {
+                    taskColor = '#27ae60'; // Green for completed tasks
+                } else if (finishDate < currentDate && percentComplete < 100) {
+                    taskColor = '#e74c3c'; // Red for overdue and incomplete tasks
+                } else {
+                    // Default colors based on OutlineLevel
+                    var outlineLevel = task.OutlineLevel || 1;
+                    if (outlineLevel === 1) {
+                        taskColor = '#7f8c8d';
+                    } else if (outlineLevel === 2) {
+                        taskColor = '#3498db';
+                    } else if (outlineLevel >= 3) {
+                        taskColor = '#85c1e9';
+                    } else {
+                        taskColor = '#3498db'; // Default color
+                    }
                 }
 
                 // Task bar
