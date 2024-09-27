@@ -123,7 +123,7 @@
             padding: 10px;
             border-radius: 4px;
             font-size: 12px;
-            max-width: 800px; /* Increased from 400px to 800px */
+            max-width: 800px;
             display: none;
             z-index: 1000;
             white-space: pre-wrap;
@@ -134,6 +134,39 @@
             stroke: #555;
             stroke-width: 1.5;
             fill: none;
+        }
+
+        /* Popup styling */
+        .popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #fff;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            z-index: 2000;
+            display: none;
+            width: 400px;
+            max-width: 90%;
+        }
+
+        .popup input, .popup select, .popup textarea {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 5px;
+        }
+
+        .popup button {
+            margin-right: 5px;
+            padding: 5px 10px;
+        }
+
+        .popup label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -162,6 +195,11 @@
 
     <!-- Tooltip for displaying Resource Names and Notes -->
     <div id="tooltip"></div>
+
+    <!-- Edit Task Popup -->
+    <div id="editTaskPopup" class="popup">
+        <!-- Content will be dynamically added -->
+    </div>
 
     <script>
         // Global variables
@@ -643,6 +681,10 @@
                     hideTooltip();
                 });
 
+                rect.addEventListener('click', function(e) {
+                    showEditTaskPopup(task);
+                });
+
                 svg.appendChild(rect);
 
                 validTaskIndex++;
@@ -838,6 +880,97 @@
             var month = ('0' + (date.getMonth() + 1)).slice(-2);
             var year = date.getFullYear();
             return day + '/' + month + '/' + year;
+        }
+
+        // Format date for input[type="date"]
+        function formatDateInput(dateStr) {
+            var date = new Date(dateStr);
+            if (isNaN(date.getTime())) return '';
+            var year = date.getFullYear();
+            var month = ('0' + (date.getMonth() + 1)).slice(-2);
+            var day = ('0' + date.getDate()).slice(-2);
+            return year + '-' + month + '-' + day;
+        }
+
+        // Show Edit Task Popup
+        function showEditTaskPopup(task) {
+            var popup = document.getElementById('editTaskPopup');
+            popup.innerHTML = ''; // Clear previous content
+
+            var form = document.createElement('form');
+
+            // Create input fields for the parameters
+            var fields = [
+                { label: 'Outline Level', name: 'OutlineLevel', type: 'number', value: task.OutlineLevel },
+                { label: 'ID', name: 'ID', type: 'text', value: task.ID },
+                { label: 'Name', name: 'Name', type: 'text', value: task.Name },
+                { label: 'Start', name: 'Start', type: 'date', value: formatDateInput(task.Start) },
+                { label: 'Finish', name: 'Finish', type: 'date', value: formatDateInput(task.Finish) },
+                { label: '% Complete', name: '%Complete', type: 'number', value: task['%Complete'] },
+                { label: 'Predecessor', name: 'Predecessors', type: 'text', value: task.Predecessors },
+                { label: 'Resource', name: 'ResourceNames', type: 'text', value: task.ResourceNames },
+                { label: 'Notes', name: 'Notes', type: 'textarea', value: task.Notes }
+            ];
+
+            fields.forEach(function(field) {
+                var label = document.createElement('label');
+                label.textContent = field.label;
+                form.appendChild(label);
+
+                var input;
+                if (field.type === 'textarea') {
+                    input = document.createElement('textarea');
+                    input.rows = 4;
+                } else {
+                    input = document.createElement('input');
+                    input.type = field.type;
+                }
+                input.name = field.name;
+                input.value = field.value || '';
+                form.appendChild(input);
+            });
+
+            var buttonContainer = document.createElement('div');
+            buttonContainer.style.textAlign = 'right';
+
+            var applyButton = document.createElement('button');
+            applyButton.textContent = 'Apply';
+            applyButton.type = 'button';
+            applyButton.addEventListener('click', function() {
+                // Update the task with the new values
+                var formData = new FormData(form);
+                fields.forEach(function(field) {
+                    var value = formData.get(field.name);
+                    if (field.name === 'OutlineLevel') {
+                        task[field.name] = parseInt(value);
+                    } else if (field.name === '%Complete') {
+                        task[field.name] = parseFloat(value);
+                    } else if (field.name === 'Start' || field.name === 'Finish') {
+                        task[field.name] = value;
+                    } else {
+                        task[field.name] = value;
+                    }
+                });
+                // Rebuild task hierarchy and re-render the chart
+                buildTaskHierarchy();
+                renderGanttChart();
+                // Hide the popup
+                popup.style.display = 'none';
+            });
+            buttonContainer.appendChild(applyButton);
+
+            var cancelButton = document.createElement('button');
+            cancelButton.textContent = 'Cancel';
+            cancelButton.type = 'button';
+            cancelButton.addEventListener('click', function() {
+                popup.style.display = 'none';
+            });
+            buttonContainer.appendChild(cancelButton);
+
+            form.appendChild(buttonContainer);
+
+            popup.appendChild(form);
+            popup.style.display = 'block';
         }
 
         // Export functionality
