@@ -797,6 +797,8 @@
             var resource = task.ResourceNames || 'No Resource';
             var notes = task.Notes || '';
             var percentComplete = task['%Complete'] || '0';
+            var startDate = task.Start ? new Date(task.Start) : null;
+            var finishDate = task.Finish ? new Date(task.Finish) : null;
 
             notes = stripHTMLTags(notes);
 
@@ -804,6 +806,11 @@
             content += '<strong>Task:</strong> ' + taskName + '<br><br>';
             if (resource) {
                 content += '<strong>Resource:</strong> ' + resource + '<br><br>';
+            }
+            if (startDate && finishDate && !isNaN(startDate) && !isNaN(finishDate)) {
+                var startStr = formatDate(startDate);
+                var finishStr = formatDate(finishDate);
+                content += '<strong>Task Date:</strong> ' + startStr + ' - ' + finishStr + '<br><br>';
             }
             if (notes) {
                 content += '<strong>Notes:</strong><br>' + notes + '<br><br>';
@@ -824,6 +831,13 @@
             tmp.innerHTML = html;
             var text = tmp.textContent || tmp.innerText || '';
             return text.trim();
+        }
+
+        function formatDate(date) {
+            var day = ('0' + date.getDate()).slice(-2);
+            var month = ('0' + (date.getMonth() + 1)).slice(-2);
+            var year = date.getFullYear();
+            return day + '/' + month + '/' + year;
         }
 
         // Export functionality
