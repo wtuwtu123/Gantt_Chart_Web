@@ -21,12 +21,13 @@ document.getElementById('csvFileInput').addEventListener('change', function(e) {
     if (!file) {
         return;
     }
-    var reader = new FileReader();
-    reader.onload = function(e) {
-        var contents = e.target.result;
-        parseCSV(contents);
-    };
-    reader.readAsText(file);
+    Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+            parseCSVResults(results);
+        }
+    });
 });
 
 // Resizing functionality
@@ -58,59 +59,20 @@ document.addEventListener('mouseup', function(e) {
     isResizing = false;
 });
 
-function parseCSV(contents) {
-    var delimiter = contents.indexOf('\t') !== -1 ? '\t' : ',';
-    var pattern = new RegExp(
-        '(\\' + delimiter + '|\\r?\\n|\\r|^)' +
-        '(?:"([^"]*(?:""[^"]*)*)"|' +
-        '([^"\\' + delimiter + '\\r\\n]*))',
-        'gi'
-    );
+// Parse CSV results from Papa Parse
+function parseCSVResults(results) {
+    var data = results.data;
+    var meta = results.meta;
 
-    var data = [];
-    var matches = null;
-    var headers = [];
-    var row = [];
-    var firstLine = true;
-
-    while ((matches = pattern.exec(contents)) !== null) {
-        var matchedDelimiter = matches[1];
-
-        // If we hit a new line (not the delimiter), process the row
-        if (matchedDelimiter.length && matchedDelimiter !== delimiter) {
-            if (firstLine) {
-                headers = row;
-                originalHeaders = headers.slice();
-                firstLine = false;
-            } else {
-                data.push(row);
-            }
-            row = [];
-        }
-
-        var value = matches[2] ? matches[2].replace(/""/g, '"') : matches[3];
-        row.push(value);
-    }
-
-    // Add the last row after parsing is complete
-    if (row.length > 0) {
-        if (firstLine) {
-            headers = row;
-            originalHeaders = headers.slice();
-        } else {
-            data.push(row);
-        }
-    }
+    originalHeaders = meta.fields;
 
     tasks = [];
 
-    data.forEach(function(values) {
+    data.forEach(function(row) {
         var task = {};
-        for (var i = 0; i < headers.length; i++) {
-            var header = headers[i];
-            var value = values[i] || '';
-            task[header] = value;
-        }
+        originalHeaders.forEach(function(header) {
+            task[header] = row[header] || '';
+        });
         // Ensure IDs are strings
         task['ID'] = task['ID'].toString();
         tasks.push(task);
@@ -150,7 +112,7 @@ function populateResourceFilter() {
     });
 }
 
-// Modified buildTaskHierarchy function
+// Build task hierarchy
 function buildTaskHierarchy() {
     tasks.forEach(function(task) {
         task.children = [];
@@ -558,7 +520,7 @@ function drawDependencies(svg, tasksList, taskMap) {
         var predecessors = task['Predecessors'].split(',');
 
         predecessors.forEach(function(predecessorStr) {
-            var match = predecessorStr.trim().match(/^(\d+)(FS|SS|FF|SF)?/i);
+            var match = predecessorStr.trim().match(/^(\d+)([FS]{1,2})?(\+|\-)?(\d+)?\s*(day|days)?$/i);
             if (!match) return;
 
             var predecessorID = match[1].toString();
@@ -768,33 +730,22 @@ document.getElementById('exportButton').addEventListener('click', function() {
 });
 
 function exportCSV() {
-    var csvContent = '';
-    var delimiter = ',';
-    var lineEnding = '\r\n'; // Use CRLF for Windows compatibility
-
-    // Escape and format headers
-    var escapedHeaders = originalHeaders.map(function(header) {
-        return escapeCSVField(header);
-    });
-    csvContent += escapedHeaders.join(delimiter) + lineEnding;
-
-    tasks.forEach(function(task) {
-        var row = [];
+    // Prepare data for export
+    var data = tasks.map(function(task) {
+        var row = {};
         originalHeaders.forEach(function(header) {
-            var value = task[header];
-            if (value === null || value === undefined) {
-                value = '';
-            } else if (typeof value !== 'string') {
-                value = value.toString();
-            }
-
-            value = escapeCSVField(value);
-            row.push(value);
+            row[header] = task[header];
         });
-        csvContent += row.join(delimiter) + lineEnding;
+        return row;
     });
 
-    var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    var csv = Papa.unparse({
+        fields: originalHeaders,
+        data: data
+    });
+
+    // Create a Blob and trigger a download
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     var url = URL.createObjectURL(blob);
     var link = document.createElement('a');
     link.setAttribute('href', url);
@@ -803,19 +754,6 @@ function exportCSV() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-}
-
-// Helper function to escape CSV fields
-function escapeCSVField(value) {
-    // Escape double quotes by replacing " with ""
-    value = value.replace(/"/g, '""');
-
-    // Enclose the value in double quotes if it contains special characters
-    if (/[",\r\n]/.test(value)) {
-        value = '"' + value + '"';
-    }
-
-    return value;
 }
 
 // Collapse All and Expand All buttons
