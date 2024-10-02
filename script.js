@@ -58,82 +58,75 @@ document.addEventListener('mouseup', function(e) {
     isResizing = false;
 });
 
-// CSV parsing functions
 function parseCSV(contents) {
-    var lines = contents.trim().split('\n');
     var delimiter = contents.indexOf('\t') !== -1 ? '\t' : ',';
-    var headers = parseCSVLine(lines[0], delimiter);
+    var pattern = new RegExp(
+        '(\\' + delimiter + '|\\r?\\n|\\r|^)' +
+        '(?:"([^"]*(?:""[^"]*)*)"|' +
+        '([^"\\' + delimiter + '\\r\\n]*))',
+        'gi'
+    );
 
-    originalHeaders = headers.slice();
+    var data = [];
+    var matches = null;
+    var headers = [];
+    var row = [];
+    var firstLine = true;
 
-    headers = headers.map(function(header) {
-        return header.trim().replace(/\s+/g, '');
-    });
+    while ((matches = pattern.exec(contents)) !== null) {
+        var matchedDelimiter = matches[1];
+
+        // If we hit a new line (not the delimiter), process the row
+        if (matchedDelimiter.length && matchedDelimiter !== delimiter) {
+            if (firstLine) {
+                headers = row;
+                originalHeaders = headers.slice();
+                firstLine = false;
+            } else {
+                data.push(row);
+            }
+            row = [];
+        }
+
+        var value = matches[2] ? matches[2].replace(/""/g, '"') : matches[3];
+        row.push(value);
+    }
+
+    // Add the last row after parsing is complete
+    if (row.length > 0) {
+        if (firstLine) {
+            headers = row;
+            originalHeaders = headers.slice();
+        } else {
+            data.push(row);
+        }
+    }
 
     tasks = [];
 
-    for (var i = 1; i < lines.length; i++) {
-        var line = lines[i].trim();
-        if (line === '') continue;
-
-        var values = parseCSVLine(line, delimiter);
-
-        if (values.length > headers.length) {
-            values[headers.length - 1] = values.slice(headers.length - 1).join(delimiter);
-            values = values.slice(0, headers.length);
-        } else {
-            while (values.length < headers.length) {
-                values.push('');
-            }
-        }
-
-        values = values.map(function(v) {
-            return v.replace(/^"|"$/g, '').trim();
-        });
-
+    data.forEach(function(values) {
         var task = {};
-        for (var j = 0; j < headers.length; j++) {
-            var header = headers[j];
-            var value = values[j];
+        for (var i = 0; i < headers.length; i++) {
+            var header = headers[i];
+            var value = values[i] || '';
             task[header] = value;
         }
-
         // Ensure IDs are strings
-        task.ID = task.ID.toString();
-
+        task['ID'] = task['ID'].toString();
         tasks.push(task);
-    }
+    });
 
     buildTaskHierarchy();
     populateResourceFilter();
     renderGanttChart();
 }
 
-function parseCSVLine(line, delimiter) {
-    var values = [];
-    var current = '';
-    var insideQuotes = false;
-    for (var i = 0; i < line.length; i++) {
-        var char = line[i];
-        if (char === '"') {
-            insideQuotes = !insideQuotes;
-        } else if (char === delimiter && !insideQuotes) {
-            values.push(current);
-            current = '';
-        } else {
-            current += char;
-        }
-    }
-    values.push(current);
-    return values;
-}
-
 // Populate resource filter dropdown
 function populateResourceFilter() {
     var resourceSet = new Set();
     tasks.forEach(function(task) {
-        if (task.ResourceNames && task.ResourceNames.trim() !== '') {
-            resourceSet.add(task.ResourceNames.trim());
+        if (task['Resource Names'] && task['Resource Names'].trim() !== '') {
+            resourceSet.add(task['Resource Names'].trim());
         }
     });
 
@@ -165,16 +158,16 @@ function buildTaskHierarchy() {
         task.parent = null; // Reset parent
 
         // Ensure IDs are strings
-        task.ID = task.ID.toString();
+        task['ID'] = task['ID'].toString();
 
-        // Parse OutlineLevel as integer
-        task.OutlineLevel = parseInt(task.OutlineLevel) || 1;
+        // Parse Outline Level as integer
+        task['Outline Level'] = parseInt(task['Outline Level']) || 1;
     });
 
     var lastTasksAtLevel = {}; // Keep track of the last task at each level
 
     tasks.forEach(function(task) {
-        var outlineLevel = task.OutlineLevel;
+        var outlineLevel = task['Outline Level'];
 
         // If the task is at level 1, it has no parent
         if (outlineLevel === 1) {
@@ -206,10 +199,10 @@ function filterTasks() {
     var includedTaskIDs = new Set();
 
     if (resourceFilter === 'All') {
-        includedTaskIDs = new Set(tasks.map(task => task.ID));
+        includedTaskIDs = new Set(tasks.map(task => task['ID']));
     } else {
         var tasksWithResource = tasks.filter(function(task) {
-            return task.ResourceNames && task.ResourceNames.trim() === resourceFilter;
+            return task['Resource Names'] && task['Resource Names'].trim() === resourceFilter;
         });
 
         tasksWithResource.forEach(function(task) {
@@ -219,13 +212,13 @@ function filterTasks() {
 
     // Build filteredTasks by including tasks in the original order
     filteredTasks = tasks.filter(function(task) {
-        return includedTaskIDs.has(task.ID);
+        return includedTaskIDs.has(task['ID']);
     });
 }
 
 function includeTaskAndAncestors(task, includedTaskIDs) {
-    if (!includedTaskIDs.has(task.ID)) {
-        includedTaskIDs.add(task.ID);
+    if (!includedTaskIDs.has(task['ID'])) {
+        includedTaskIDs.add(task['ID']);
 
         // Include parent tasks to maintain hierarchy
         if (task.parent) {
@@ -282,8 +275,8 @@ function renderGanttChart() {
     });
 
     visibleTasks.forEach(function(task) {
-        var startDate = new Date(task.Start);
-        var finishDate = new Date(task.Finish);
+        var startDate = new Date(task['Start']);
+        var finishDate = new Date(task['Finish']);
 
         if (isNaN(startDate.getTime()) || isNaN(finishDate.getTime())) {
             return;
@@ -366,8 +359,8 @@ function renderGanttChart() {
     var currentDate = new Date(); // Get the current date
 
     visibleTasks.forEach(function(task) {
-        var startDate = new Date(task.Start);
-        var finishDate = new Date(task.Finish);
+        var startDate = new Date(task['Start']);
+        var finishDate = new Date(task['Finish']);
 
         if (isNaN(startDate.getTime()) || isNaN(finishDate.getTime())) {
             return;
@@ -379,7 +372,7 @@ function renderGanttChart() {
         var yPosition = headerHeight + validTaskIndex * taskRowHeight;
 
         // Ensure IDs are strings
-        var taskID = task.ID.toString();
+        var taskID = task['ID'].toString();
 
         taskMap[taskID] = {
             x: taskStartOffset,
@@ -403,7 +396,7 @@ function renderGanttChart() {
         var hasChildren = task.children && task.children.length > 0;
         if (hasChildren) {
             var indicator = document.createElementNS(svgNS, 'text');
-            indicator.setAttribute('x', 5 + ((task.OutlineLevel - 1) * 15));
+            indicator.setAttribute('x', 5 + ((task['Outline Level'] - 1) * 15));
             indicator.setAttribute('y', yPosition + taskRowHeight / 2 + 4);
             indicator.setAttribute('class', 'collapsed-indicator');
             indicator.textContent = task.collapsed ? '+' : '-';
@@ -418,12 +411,12 @@ function renderGanttChart() {
         // Task name text
         var taskNameText = document.createElementNS(svgNS, 'text');
         var textX = hasChildren
-            ? 20 + ((task.OutlineLevel - 1) * 15)
-            : 5 + ((task.OutlineLevel - 1) * 15);
+            ? 20 + ((task['Outline Level'] - 1) * 15)
+            : 5 + ((task['Outline Level'] - 1) * 15);
         taskNameText.setAttribute('x', textX);
         taskNameText.setAttribute('y', yPosition + taskRowHeight / 2 + 4);
         taskNameText.setAttribute('class', 'task-name');
-        taskNameText.textContent = task.Name || 'No Name';
+        taskNameText.textContent = task['Name'] || 'No Name';
 
         taskNameText.addEventListener('click', function() {
             if (hasChildren) {
@@ -433,13 +426,13 @@ function renderGanttChart() {
         });
 
         var title = document.createElementNS(svgNS, 'title');
-        title.textContent = task.Name || 'No Name';
+        title.textContent = task['Name'] || 'No Name';
         taskNameText.appendChild(title);
 
         taskNamesSVG.appendChild(taskNameText);
 
         // Determine task color based on completion and overdue status
-        var percentComplete = parseFloat(task['%Complete']) || 0;
+        var percentComplete = parseFloat(task['% Complete']) || 0;
         var taskColor;
 
         if (percentComplete === 100) {
@@ -447,8 +440,8 @@ function renderGanttChart() {
         } else if (finishDate < currentDate && percentComplete < 100) {
             taskColor = '#e74c3c'; // Red for overdue and incomplete tasks
         } else {
-            // Default colors based on OutlineLevel
-            var outlineLevel = task.OutlineLevel || 1;
+            // Default colors based on Outline Level
+            var outlineLevel = task['Outline Level'] || 1;
             if (outlineLevel === 1) {
                 taskColor = '#7f8c8d';
             } else if (outlineLevel === 2) {
@@ -558,11 +551,11 @@ function drawDependencies(svg, tasksList, taskMap) {
     var svgNS = 'http://www.w3.org/2000/svg';
 
     tasksList.forEach(function(task) {
-        if (!task.Predecessors || !taskMap[task.ID.toString()] || !task.visible) {
+        if (!task['Predecessors'] || !taskMap[task['ID'].toString()] || !task.visible) {
             return;
         }
 
-        var predecessors = task.Predecessors.split(',');
+        var predecessors = task['Predecessors'].split(',');
 
         predecessors.forEach(function(predecessorStr) {
             var match = predecessorStr.trim().match(/^(\d+)(FS|SS|FF|SF)?/i);
@@ -572,11 +565,11 @@ function drawDependencies(svg, tasksList, taskMap) {
             var dependencyType = match[2] || 'FS';
 
             var predecessorTask = taskMap[predecessorID];
-            var successorTask = taskMap[task.ID.toString()];
+            var successorTask = taskMap[task['ID'].toString()];
 
             if (!predecessorTask || !successorTask) return;
 
-            var predecessorTaskObj = tasks.find(function(t) { return t.ID.toString() === predecessorID; });
+            var predecessorTaskObj = tasks.find(function(t) { return t['ID'].toString() === predecessorID; });
             if (!predecessorTaskObj || !predecessorTaskObj.visible) return;
 
             var startX, startY, endX, endY;
@@ -631,12 +624,12 @@ function drawDependencies(svg, tasksList, taskMap) {
 var tooltip = document.getElementById('tooltip');
 
 function showTooltip(e, task) {
-    var taskName = task.Name || 'No Name';
-    var resource = task.ResourceNames || 'No Resource';
-    var notes = task.Notes || '';
-    var percentComplete = task['%Complete'] || '0';
-    var startDate = task.Start ? new Date(task.Start) : null;
-    var finishDate = task.Finish ? new Date(task.Finish) : null;
+    var taskName = task['Name'] || 'No Name';
+    var resource = task['Resource Names'] || 'No Resource';
+    var notes = task['Notes'] || '';
+    var percentComplete = task['% Complete'] || '0';
+    var startDate = task['Start'] ? new Date(task['Start']) : null;
+    var finishDate = task['Finish'] ? new Date(task['Finish']) : null;
 
     notes = stripHTMLTags(notes);
 
@@ -697,15 +690,15 @@ function showEditTaskPopup(task) {
 
     // Create input fields for the parameters
     var fields = [
-        { label: 'Outline Level', name: 'OutlineLevel', type: 'number', value: task.OutlineLevel },
-        { label: 'ID', name: 'ID', type: 'text', value: task.ID },
-        { label: 'Name', name: 'Name', type: 'text', value: task.Name },
-        { label: 'Start', name: 'Start', type: 'date', value: formatDateInput(task.Start) },
-        { label: 'Finish', name: 'Finish', type: 'date', value: formatDateInput(task.Finish) },
-        { label: '% Complete', name: '%Complete', type: 'number', value: task['%Complete'] },
-        { label: 'Predecessor', name: 'Predecessors', type: 'text', value: task.Predecessors },
-        { label: 'Resource', name: 'ResourceNames', type: 'text', value: task.ResourceNames },
-        { label: 'Notes', name: 'Notes', type: 'textarea', value: task.Notes }
+        { label: 'Outline Level', name: 'Outline Level', type: 'number', value: task['Outline Level'] },
+        { label: 'ID', name: 'ID', type: 'text', value: task['ID'] },
+        { label: 'Name', name: 'Name', type: 'text', value: task['Name'] },
+        { label: 'Start', name: 'Start', type: 'date', value: formatDateInput(task['Start']) },
+        { label: 'Finish', name: 'Finish', type: 'date', value: formatDateInput(task['Finish']) },
+        { label: '% Complete', name: '% Complete', type: 'number', value: task['% Complete'] },
+        { label: 'Predecessors', name: 'Predecessors', type: 'text', value: task['Predecessors'] },
+        { label: 'Resource Names', name: 'Resource Names', type: 'text', value: task['Resource Names'] },
+        { label: 'Notes', name: 'Notes', type: 'textarea', value: task['Notes'] }
     ];
 
     fields.forEach(function(field) {
@@ -737,9 +730,9 @@ function showEditTaskPopup(task) {
         var formData = new FormData(form);
         fields.forEach(function(field) {
             var value = formData.get(field.name);
-            if (field.name === 'OutlineLevel') {
+            if (field.name === 'Outline Level') {
                 task[field.name] = parseInt(value);
-            } else if (field.name === '%Complete') {
+            } else if (field.name === '% Complete') {
                 task[field.name] = parseFloat(value);
             } else if (field.name === 'Start' || field.name === 'Finish') {
                 task[field.name] = value;
@@ -777,19 +770,28 @@ document.getElementById('exportButton').addEventListener('click', function() {
 function exportCSV() {
     var csvContent = '';
     var delimiter = ',';
+    var lineEnding = '\r\n'; // Use CRLF for Windows compatibility
 
-    csvContent += originalHeaders.join(delimiter) + '\n';
+    // Escape and format headers
+    var escapedHeaders = originalHeaders.map(function(header) {
+        return escapeCSVField(header);
+    });
+    csvContent += escapedHeaders.join(delimiter) + lineEnding;
 
     tasks.forEach(function(task) {
         var row = [];
         originalHeaders.forEach(function(header) {
-            var value = task[header.trim().replace(/\s+/g, '')] || '';
-            if (value.indexOf(delimiter) >= 0 || value.indexOf('\n') >= 0 || value.indexOf('"') >= 0) {
-                value = '"' + value.replace(/"/g, '""') + '"';
+            var value = task[header];
+            if (value === null || value === undefined) {
+                value = '';
+            } else if (typeof value !== 'string') {
+                value = value.toString();
             }
+
+            value = escapeCSVField(value);
             row.push(value);
         });
-        csvContent += row.join(delimiter) + '\n';
+        csvContent += row.join(delimiter) + lineEnding;
     });
 
     var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -801,6 +803,19 @@ function exportCSV() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+}
+
+// Helper function to escape CSV fields
+function escapeCSVField(value) {
+    // Escape double quotes by replacing " with ""
+    value = value.replace(/"/g, '""');
+
+    // Enclose the value in double quotes if it contains special characters
+    if (/[",\r\n]/.test(value)) {
+        value = '"' + value + '"';
+    }
+
+    return value;
 }
 
 // Collapse All and Expand All buttons
