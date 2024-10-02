@@ -1,0 +1,164 @@
+/* Basic styles and box model adjustments */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+}
+
+#controls {
+    margin: 10px;
+}
+
+#controls button, #controls select {
+    margin-right: 5px;
+}
+
+#container {
+    display: flex;
+    height: calc(100vh - 130px);
+    overflow: hidden;
+}
+
+#taskNamesContainer {
+    width: 200px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border-right: 1px solid #ccc;
+    position: relative;
+    background-color: #fff;
+    flex-shrink: 0; /* Prevent shrinking when resizing */
+}
+
+#separator {
+    width: 5px;
+    cursor: col-resize;
+    background-color: #ccc;
+    flex-shrink: 0; /* Prevent shrinking */
+}
+
+#ganttChartContainer {
+    flex-grow: 1;
+    overflow: auto;
+    position: relative;
+}
+
+svg {
+    font-family: Arial, sans-serif;
+}
+
+.task-name {
+    fill: #000;
+    font-size: 12px;
+    text-anchor: start;
+    cursor: pointer;
+}
+
+.collapsed-indicator {
+    font-weight: bold;
+    cursor: pointer;
+    user-select: none;
+}
+
+.task-bar {
+    cursor: pointer;
+}
+
+.axis-label {
+    fill: #333;
+    font-size: 12px;
+    text-anchor: middle;
+}
+
+.axis-line {
+    stroke: #e0e0e0;
+    stroke-width: 1;
+}
+
+.header {
+    fill: #f0f0f0;
+    stroke: #ccc;
+    stroke-width: 1;
+}
+
+.header-text {
+    fill: #000;
+    font-size: 12px;
+    font-weight: bold;
+    text-anchor: start;
+}
+
+/* Scrollbar customization */
+#ganttChartContainer::-webkit-scrollbar {
+    height: 16px;
+}
+
+#ganttChartContainer::-webkit-scrollbar-thumb {
+    background-color: #ccc;
+    border-radius: 8px;
+}
+
+#ganttChartContainer {
+    scrollbar-width: thin;
+    scrollbar-color: #ccc transparent;
+}
+
+/* Tooltip styling */
+#tooltip {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    background-color: rgba(50, 50, 50, 0.9);
+    color: #fff;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    max-width: 800px;
+    display: none;
+    z-index: 1000;
+    white-space: pre-wrap;
+}
+
+/* Dependency lines style */
+.dependency-line {
+    stroke: #555;
+    stroke-width: 1.5;
+    fill: none;
+}
+
+/* Popup styling */
+.popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #fff;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    z-index: 2000;
+    display: none;
+    width: 400px;
+    max-width: 90%;
+}
+
+.popup input, .popup select, .popup textarea {
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 5px;
+}
+
+.popup button {
+    margin-right: 5px;
+    padding: 5px 10px;
+}
+
+.popup label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
