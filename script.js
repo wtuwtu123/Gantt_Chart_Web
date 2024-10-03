@@ -718,10 +718,72 @@ function showEditTaskPopup(task) {
     });
     buttonContainer.appendChild(cancelButton);
 
+    // Add Delete Task button
+    var deleteButton = document.createElement('button');
+    deleteButton.textContent = 'Delete Task';
+    deleteButton.type = 'button';
+    deleteButton.className = 'delete-button';
+    deleteButton.addEventListener('click', function() {
+        if (confirm('Are you sure you want to delete this task?')) {
+            deleteTask(task);
+            // Rebuild task hierarchy and re-render the chart
+            buildTaskHierarchy();
+            renderGanttChart();
+            // Hide the popup
+            popup.style.display = 'none';
+        }
+    });
+    buttonContainer.appendChild(deleteButton);
+
     form.appendChild(buttonContainer);
 
     popup.appendChild(form);
     popup.style.display = 'block';
+}
+
+// Function to delete a task and update predecessors
+function deleteTask(taskToDelete) {
+    // Gather IDs of the task and its descendants
+    var idsToDelete = getTaskAndDescendantIDs(taskToDelete);
+
+    // Remove tasks with these IDs from the tasks array
+    tasks = tasks.filter(function(task) {
+        return !idsToDelete.includes(task['ID']);
+    });
+
+    // Update Predecessors in remaining tasks
+    tasks.forEach(function(task) {
+        if (task['Predecessors']) {
+            var updatedPredecessors = task['Predecessors']
+                .split(',')
+                .map(function(pred) {
+                    pred = pred.trim();
+                    var match = pred.match(/^(\d+)([FS]{1,2})(.*)$/i);
+                    if (match) {
+                        var predID = match[1];
+                        if (idsToDelete.includes(predID)) {
+                            return null; // Remove this predecessor
+                        } else {
+                            return pred; // Keep this predecessor
+                        }
+                    } else {
+                        return pred; // Keep as is
+                    }
+                })
+                .filter(function(pred) { return pred !== null; }) // Remove nulls
+                .join(', ');
+            task['Predecessors'] = updatedPredecessors;
+        }
+    });
+}
+
+// Helper function to get IDs of task and its descendants
+function getTaskAndDescendantIDs(task) {
+    var ids = [task['ID']];
+    task.children.forEach(function(child) {
+        ids = ids.concat(getTaskAndDescendantIDs(child));
+    });
+    return ids;
 }
 
 // Export functionality
